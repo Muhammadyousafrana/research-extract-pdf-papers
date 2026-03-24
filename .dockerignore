@@ -1,0 +1,44 @@
+# Ignore Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+*.venv
+env/
+venv/
+ENV/
+.Python
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore data and output directories
+data/
+output/
+results/
+logs/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore git files
+.git
+.gitignore
+
+# Ignore Docker files
+Dockerfile
+docker-compose.yml
+
+# Ignore test and coverage files
+*.cover
+.coverage
+coverage.xml
+*.log
+
+# Ignore miscellaneous
+*.swp
+*.bak
+*.tmp
+*.old

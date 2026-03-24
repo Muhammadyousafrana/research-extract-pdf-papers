@@ -1,0 +1,60 @@
+{
+  "2105.02723v1": {
+    "title": "Do You Even Need Attention? A Stack of Feed-Forward Layers Does Surprisingly Well on ImageNet",
+    "authors": [
+      "Luke Melas-Kyriazi"
+    ],
+    "summary": "The strong performance of vision transformers on image classification and other vision tasks is often attributed to the design of their multi-head attention layers. However, the extent to which attention is responsible for this strong performance remains unclear. In this short report, we ask: is the attention layer even necessary? Specifically, we replace the attention layer in a vision transformer with a feed-forward layer applied over the patch dimension. The resulting architecture is simply a series of feed-forward layers applied over the patch and feature dimensions in an alternating fashion. In experiments on ImageNet, this architecture performs surprisingly well: a ViT/DeiT-base-sized model obtains 74.9\\% top-1 accuracy, compared to 77.9\\% and 79.9\\% for ViT and DeiT respectively. These results indicate that aspects of vision transformers other than attention, such as the patch embedding, may be more responsible for their strong performance than previously thought. We hope these results prompt the community to spend more time trying to understand why our current models are as effective as they are.",
+    "pdf_url": "https://arxiv.org/pdf/2105.02723v1",
+    "published": "2021-05-06",
+    "indexed": false
+  },
+  "2512.19700v1": {
+    "title": "\"All You Need\" is Not All You Need for a Paper Title: On the Origins of a Scientific Meme",
+    "authors": [
+      "Anton Alyakin"
+    ],
+    "summary": "The 2017 paper ''Attention Is All You Need'' introduced the Transformer architecture-and inadvertently spawned one of machine learning's most persistent naming conventions. We analyze 717 arXiv preprints containing ''All You Need'' in their titles (2009-2025), finding exponential growth ($R^2$ > 0.994) following the original paper, with 200 titles in 2025 alone. Among papers following the canonical ''X [Is] All You Need'' structure, ''Attention'' remains the most frequently claimed necessity (28 occurrences). Situating this phenomenon within memetic theory, we argue the pattern's success reflects competitive pressures in scientific communication that increasingly favor memorability over precision. Whether this trend represents harmless academic whimsy or symptomatic sensationalism, we leave-with appropriate self-awareness-to the reader.",
+    "pdf_url": "https://arxiv.org/pdf/2512.19700v1",
+    "published": "2025-12-03",
+    "indexed": true
+  },
+  "1806.11202v1": {
+    "title": "Quit When You Can: Efficient Evaluation of Ensembles with Ordering Optimization",
+    "authors": [
+      "Serena Wang",
+      "Maya Gupta",
+      "Seungil You"
+    ],
+    "summary": "Given a classifier ensemble and a set of examples to be classified, many examples may be confidently and accurately classified after only a subset of the base models in the ensemble are evaluated. This can reduce both mean latency and CPU while maintaining the high accuracy of the original ensemble. To achieve such gains, we propose jointly optimizing a fixed evaluation order of the base models and early-stopping thresholds. Our proposed objective is a combinatorial optimization problem, but we provide a greedy algorithm that achieves a 4-approximation of the optimal solution for certain cases. For those cases, this is also the best achievable polynomial time approximation bound unless $P = NP$. Experiments on benchmark and real-world problems show that the proposed Quit When You Can (QWYC) algorithm can speed-up average evaluation time by $2$x--$4$x, and is around $1.5$x faster than prior work. QWYC's joint optimization of ordering and thresholds also performed better in experiments than various fixed orderings, including gradient boosted trees' ordering.",
+    "pdf_url": "https://arxiv.org/pdf/1806.11202v1",
+    "published": "2018-06-28",
+    "indexed": false
+  },
+  "2103.05236v2": {
+    "title": "GAN Vocoder: Multi-Resolution Discriminator Is All You Need",
+    "authors": [
+      "Jaeseong You",
+      "Dalhyun Kim",
+      "Gyuhyeon Nam",
+      "Geumbyeol Hwang",
+      "Gyeongsu Chae"
+    ],
+    "summary": "Several of the latest GAN-based vocoders show remarkable achievements, outperforming autoregressive and flow-based competitors in both qualitative and quantitative measures while synthesizing orders of magnitude faster. In this work, we hypothesize that the common factor underlying their success is the multi-resolution discriminating framework, not the minute details in architecture, loss function, or training strategy. We experimentally test the hypothesis by evaluating six different generators paired with one shared multi-resolution discriminating framework. For all evaluative measures with respect to text-to-speech syntheses and for all perceptual metrics, their performances are not distinguishable from one another, which supports our hypothesis.",
+    "pdf_url": "https://arxiv.org/pdf/2103.05236v2",
+    "published": "2021-03-09",
+    "indexed": false
+  },
+  "2112.05993v1": {
+    "title": "Object Counting: You Only Need to Look at One",
+    "authors": [
+      "Hui Lin",
+      "Xiaopeng Hong",
+      "Yabin Wang"
+    ],
+    "summary": "This paper aims to tackle the challenging task of one-shot object counting. Given an image containing novel, previously unseen category objects, the goal of the task is to count all instances in the desired category with only one supporting bounding box example. To this end, we propose a counting model by which you only need to Look At One instance (LaoNet). First, a feature correlation module combines the Self-Attention and Correlative-Attention modules to learn both inner-relations and inter-relations. It enables the network to be robust to the inconsistency of rotations and sizes among different instances. Second, a Scale Aggregation mechanism is designed to help extract features with different scale information. Compared with existing few-shot counting methods, LaoNet achieves state-of-the-art results while learning with a high convergence speed. The code will be available soon.",
+    "pdf_url": "https://arxiv.org/pdf/2112.05993v1",
+    "published": "2021-12-11",
+    "indexed": false
+  }
+}

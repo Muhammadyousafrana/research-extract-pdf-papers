@@ -1,0 +1,20 @@
+[project]
+name = "research-extract-pdf-papers"
+version = "0.1.0"
+description = "MCP Server"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "arxiv>=2.4.1",
+    "black>=26.3.1",
+    "httpx>=0.28.1",
+    "ipython>=9.11.0",
+    "litellm>=1.82.2",
+    "makefile>=1.1.0",
+    "mcp>=1.26.0",
+    "pylint>=4.0.5",
+    "pymupdf4llm>=1.27.2.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "python-dotenv>=1.2.2"
+]
