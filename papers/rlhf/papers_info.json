@@ -1,0 +1,80 @@
+{
+  "2312.11456v4": {
+    "title": "Iterative Preference Learning from Human Feedback: Bridging Theory and Practice for RLHF under KL-Constraint",
+    "authors": [
+      "Wei Xiong",
+      "Hanze Dong",
+      "Chenlu Ye",
+      "Ziqi Wang",
+      "Han Zhong",
+      "Heng Ji",
+      "Nan Jiang",
+      "Tong Zhang"
+    ],
+    "summary": "This paper studies the alignment process of generative models with Reinforcement Learning from Human Feedback (RLHF). We first identify the primary challenges of existing popular methods like offline PPO and offline DPO as lacking in strategical exploration of the environment. Then, to understand the mathematical principle of RLHF, we consider a standard mathematical formulation, the reverse-KL regularized contextual bandit for RLHF. Despite its widespread practical application, a rigorous theoretical analysis of this formulation remains open. We investigate its behavior in three distinct settings -- offline, online, and hybrid -- and propose efficient algorithms with finite-sample theoretical guarantees.\n  Moving towards practical applications, our framework, with a robust approximation of the information-theoretical policy improvement oracle, naturally gives rise to several novel RLHF algorithms. This includes an iterative version of the Direct Preference Optimization (DPO) algorithm for online settings, and a multi-step rejection sampling strategy for offline scenarios. Our empirical evaluations on real-world alignment experiment of large language model demonstrate that these proposed methods significantly surpass existing strong baselines, such as DPO and Rejection Sampling Optimization (RSO), showcasing the connections between solid theoretical foundations and their potent practical implementations.",
+    "pdf_url": "https://arxiv.org/pdf/2312.11456v4",
+    "published": "2023-12-18",
+    "indexed": false
+  },
+  "2405.07863v3": {
+    "title": "RLHF Workflow: From Reward Modeling to Online RLHF",
+    "authors": [
+      "Hanze Dong",
+      "Wei Xiong",
+      "Bo Pang",
+      "Haoxiang Wang",
+      "Han Zhao",
+      "Yingbo Zhou",
+      "Nan Jiang",
+      "Doyen Sahoo",
+      "Caiming Xiong",
+      "Tong Zhang"
+    ],
+    "summary": "We present the workflow of Online Iterative Reinforcement Learning from Human Feedback (RLHF) in this technical report, which is widely reported to outperform its offline counterpart by a large margin in the recent large language model (LLM) literature. However, existing open-source RLHF projects are still largely confined to the offline learning setting. In this technical report, we aim to fill in this gap and provide a detailed recipe that is easy to reproduce for online iterative RLHF. In particular, since online human feedback is usually infeasible for open-source communities with limited resources, we start by constructing preference models using a diverse set of open-source datasets and use the constructed proxy preference model to approximate human feedback. Then, we discuss the theoretical insights and algorithmic principles behind online iterative RLHF, followed by a detailed practical implementation. Our trained LLM achieves impressive performance on LLM chatbot benchmarks, including AlpacaEval-2, Arena-Hard, and MT-Bench, as well as other academic benchmarks such as HumanEval and TruthfulQA. We have shown that supervised fine-tuning (SFT) and iterative RLHF can obtain state-of-the-art performance with fully open-source datasets. Further, we have made our models, curated datasets, and comprehensive step-by-step code guidebooks publicly available. Please refer to https://github.com/RLHFlow/RLHF-Reward-Modeling and https://github.com/RLHFlow/Online-RLHF for more detailed information.",
+    "pdf_url": "https://arxiv.org/pdf/2405.07863v3",
+    "published": "2024-05-13",
+    "indexed": false
+  },
+  "2406.11715v2": {
+    "title": "Measuring memorization in RLHF for code completion",
+    "authors": [
+      "Aneesh Pappu",
+      "Billy Porter",
+      "Ilia Shumailov",
+      "Jamie Hayes"
+    ],
+    "summary": "Reinforcement learning with human feedback (RLHF) has become the dominant method to align large models to user preferences. Unlike fine-tuning, for which there are many studies regarding training data memorization, it is not clear how memorization is affected by or introduced in the RLHF alignment process. Understanding this relationship is important as real user data may be collected and used to align large models; if user data is memorized during RLHF and later regurgitated, this could raise privacy concerns. In addition to RLHF, other methods such as Direct Preference Optimization (DPO) and $\u03a8$PO have gained popularity for learning directly from human preferences, removing the need for optimizing intermediary reward models with reinforcement learning. In this work, we analyze how training data memorization can surface and propagate through each phase of RLHF and direct preference learning. We focus our study on code completion models, as code completion is one of the most popular use cases for large language models. We find that RLHF significantly decreases the chance that data used for reward modeling and reinforcement learning is memorized in comparison to directly fine-tuning on this data, but that examples already memorized during the fine-tuning stage of RLHF, will, in the majority of cases, remain memorized after RLHF. In contrast, we find that aligning by learning directly from human preference data via a special case of $\u03a8$PO, Identity Preference Optimization (IPO), increases the likelihood that training data is regurgitated compared to RLHF. Our work suggests that RLHF, as opposed to direct preference learning, is a safer way to mitigate the risk of regurgitating sensitive preference data when aligning large language models. We find our conclusions are robust across multiple code completion datasets, tasks, and model scales.",
+    "pdf_url": "https://arxiv.org/pdf/2406.11715v2",
+    "published": "2024-06-17",
+    "indexed": false
+  },
+  "2503.03039v1": {
+    "title": "LLM Misalignment via Adversarial RLHF Platforms",
+    "authors": [
+      "Erfan Entezami",
+      "Ali Naseh"
+    ],
+    "summary": "Reinforcement learning has shown remarkable performance in aligning language models with human preferences, leading to the rise of attention towards developing RLHF platforms. These platforms enable users to fine-tune models without requiring any expertise in developing complex machine learning algorithms. While these platforms offer useful features such as reward modeling and RLHF fine-tuning, their security and reliability remain largely unexplored. Given the growing adoption of RLHF and open-source RLHF frameworks, we investigate the trustworthiness of these systems and their potential impact on behavior of LLMs. In this paper, we present an attack targeting publicly available RLHF tools. In our proposed attack, an adversarial RLHF platform corrupts the LLM alignment process by selectively manipulating data samples in the preference dataset. In this scenario, when a user's task aligns with the attacker's objective, the platform manipulates a subset of the preference dataset that contains samples related to the attacker's target. This manipulation results in a corrupted reward model, which ultimately leads to the misalignment of the language model. Our results demonstrate that such an attack can effectively steer LLMs toward undesirable behaviors within the targeted domains. Our work highlights the critical need to explore the vulnerabilities of RLHF platforms and their potential to cause misalignment in LLMs during the RLHF fine-tuning process.",
+    "pdf_url": "https://arxiv.org/pdf/2503.03039v1",
+    "published": "2025-03-04",
+    "indexed": false
+  },
+  "2409.19256v2": {
+    "title": "HybridFlow: A Flexible and Efficient RLHF Framework",
+    "authors": [
+      "Guangming Sheng",
+      "Chi Zhang",
+      "Zilingfeng Ye",
+      "Xibin Wu",
+      "Wang Zhang",
+      "Ru Zhang",
+      "Yanghua Peng",
+      "Haibin Lin",
+      "Chuan Wu"
+    ],
+    "summary": "Reinforcement Learning from Human Feedback (RLHF) is widely used in Large Language Model (LLM) alignment. Traditional RL can be modeled as a dataflow, where each node represents computation of a neural network (NN) and each edge denotes data dependencies between the NNs. RLHF complicates the dataflow by expanding each node into a distributed LLM training or generation program, and each edge into a many-to-many multicast. Traditional RL frameworks execute the dataflow using a single controller to instruct both intra-node computation and inter-node communication, which can be inefficient in RLHF due to large control dispatch overhead for distributed intra-node computation. Existing RLHF systems adopt a multi-controller paradigm, which can be inflexible due to nesting distributed computation and data communication. We propose HybridFlow, which combines single-controller and multi-controller paradigms in a hybrid manner to enable flexible representation and efficient execution of the RLHF dataflow. We carefully design a set of hierarchical APIs that decouple and encapsulate computation and data dependencies in the complex RLHF dataflow, allowing efficient operation orchestration to implement RLHF algorithms and flexible mapping of the computation onto various devices. We further design a 3D-HybridEngine for efficient actor model resharding between training and generation phases, with zero memory redundancy and significantly reduced communication overhead. Our experimental results demonstrate 1.53$\\times$~20.57$\\times$ throughput improvement when running various RLHF algorithms using HybridFlow, as compared with state-of-the-art baselines. HybridFlow source code will be available at https://github.com/volcengine/verl.",
+    "pdf_url": "https://arxiv.org/pdf/2409.19256v2",
+    "published": "2024-09-28",
+    "indexed": false
+  }
+}

@@ -1,21 +1,40 @@
-import pymupdf4llm
-import fitz
-import httpx
-import arxiv
+import asyncio
 import json
 import os
+from contextlib import AsyncExitStack
 from typing import List
-from mcp.server.fastmcp import FastMCP
+
+import arxiv
+import fitz
+import httpx
+import pymupdf4llm
+from dotenv import load_dotenv
 from litellm import embedding
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from mcp.server.fastmcp import FastMCP
+
+load_dotenv()
 
 PAPER_DIR = "papers"
 REDIS_PREFIX = "doc:"
 
-# Gemini: "gemini/gemini-embedding-001" (GEMINI_API_KEY, 3072 dims)
-# Voyage: "voyage/voyage-3"             (VOYAGE_API_KEY, 1024 dims)
-# OpenAI: "openai/text-embedding-3-small"(OPENAI_API_KEY, 1536 dims)
+# Embedding config
 EMBEDDING_MODEL = "gemini/gemini-embedding-001"
 EMBEDDING_DIMS = 3072
+
+# Redis MCP server config — reads URL from env for security
+REDIS_URL = os.getenv("REDIS_URL")
+REDIS_MCP_CONFIG = {
+    "command": "uvx",
+    "args": [
+        "--from",
+        "redis-mcp-server@latest",
+        "redis-mcp-server",
+        "--url",
+        REDIS_URL,
+    ],
+}
 
 mcp = FastMCP("research")
 
@@ -26,11 +45,19 @@ mcp = FastMCP("research")
 
 
 def _get_embedding(text: str) -> List[float]:
+    """Generate an embedding vector for a single text string."""
     response = embedding(model=EMBEDDING_MODEL, input=[text])
     return response.data[0]["embedding"]
 
 
+def _get_embeddings_batch(texts: List[str]) -> List[List[float]]:
+    """Generate embedding vectors for a batch of texts in one API call."""
+    response = embedding(model=EMBEDDING_MODEL, input=texts)
+    return [item["embedding"] for item in response.data]
+
+
 def _update_indexed_flag(paper_id: str):
+    """Mark a paper as indexed in local metadata files."""
     if not os.path.exists(PAPER_DIR):
         return
     for item in os.listdir(PAPER_DIR):
@@ -44,8 +71,29 @@ def _update_indexed_flag(paper_id: str):
                     with open(file_path, "w") as f:
                         json.dump(data, f, indent=2)
                     return
-            except FileNotFoundError, json.JSONDecodeError:
+            except (FileNotFoundError, json.JSONDecodeError):
                 continue
+
+
+def _extract_text_chunks(pdf_bytes: bytes) -> List[str]:
+    """Extract markdown text from PDF bytes and split into chunks."""
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    md_text = pymupdf4llm.to_markdown(doc)
+    doc.close()
+
+    if not md_text.strip():
+        return []
+
+    return [c.strip() for c in md_text.split("\n## ") if c.strip()]
+
+
+async def _get_redis_session(exit_stack: AsyncExitStack) -> ClientSession:
+    """Create and initialize an MCP client session to the Redis MCP server."""
+    server_params = StdioServerParameters(**REDIS_MCP_CONFIG)
+    read, write = await exit_stack.enter_async_context(stdio_client(server_params))
+    session = await exit_stack.enter_async_context(ClientSession(read, write))
+    await session.initialize()
+    return session
 
 
 # ─────────────────────────────────────────────
@@ -79,7 +127,7 @@ def search_papers(topic: str, max_results: int = 5) -> List[str]:
     try:
         with open(file_path, "r") as json_file:
             papers_info = json.load(json_file)
-    except FileNotFoundError, json.JSONDecodeError:
+    except (FileNotFoundError, json.JSONDecodeError):
         papers_info = {}
 
     paper_ids = []
@@ -130,99 +178,188 @@ def extract_info(paper_id: str) -> str:
 
 
 @mcp.tool()
-def extract_chunks(paper_id: str, pdf_url: str) -> str:
+async def index_paper(paper_id: str) -> str:
     """
-    Step 1 of indexing: Fetch PDF, extract markdown, return text chunks.
-    No embeddings yet — just clean text chunks ready for embedding.
+    Download, chunk, embed, and store a paper in Redis — all in one step.
+    This is the single tool to call when the user wants to index a paper.
 
-    After calling this tool, for each chunk you should:
-      1. Call embed_chunk(chunk_text) to get the vector
-      2. Call RedisMCPServer:hset to store text fields
-      3. Call RedisMCPServer:set_vector_in_hash to store the vector
-
-    Redis key format: doc:paper:{paper_id}:chunk:{index}
+    The tool will:
+    1. Download the PDF from arXiv using the paper_id
+    2. Extract text and split into chunks
+    3. Generate embeddings for all chunks (batched)
+    4. Push all chunk data + embeddings directly to Redis
+    5. Store paper metadata in Redis
+    6. Mark the paper as indexed locally
 
     Args:
-        paper_id: arXiv paper ID
-        pdf_url:  Direct PDF URL
+        paper_id: arXiv paper ID (e.g. "1706.03762" or "1706.03762v2")
 
     Returns:
-        JSON with paper_id, total_chunks, and list of {index, redis_key, text}
+        JSON with status, paper_id, total_chunks stored, and any errors
     """
+    pdf_url = f"https://arxiv.org/pdf/{paper_id}"
+
     try:
-        response = httpx.get(pdf_url, timeout=30, follow_redirects=True)
+        # ── Step 1: Download PDF ──────────────────────────────────────
+        response = httpx.get(pdf_url, timeout=60, follow_redirects=True)
         response.raise_for_status()
 
-        doc = fitz.open(stream=response.content, filetype="pdf")
-        md_text = pymupdf4llm.to_markdown(doc)
-        doc.close()
-
-        if not md_text.strip():
+        # ── Step 2: Extract text chunks ───────────────────────────────
+        chunks = _extract_text_chunks(response.content)
+        if not chunks:
             return json.dumps(
                 {"status": "error", "error": "No text extracted from PDF"}
             )
 
-        raw_chunks = [c.strip() for c in md_text.split("\n## ") if c.strip()]
+        # ── Step 3: Batch embed all chunks ────────────────────────────
+        vectors = _get_embeddings_batch(chunks)
 
-        chunks = [
-            {
-                "index": i,
-                "redis_key": f"{REDIS_PREFIX}paper:{paper_id}:chunk:{i}",
-                "text": chunk,
+        # ── Step 4: Look up paper metadata from local files ───────────
+        paper_meta = None
+        info_str = extract_info(paper_id)
+        if not info_str.startswith("There's no saved"):
+            paper_meta = json.loads(info_str)
+
+        # ── Step 5: Push everything to Redis via MCP sub-session ──────
+        async with AsyncExitStack() as stack:
+            redis_session = await _get_redis_session(stack)
+
+            # Create vector index (safely ignore if it already exists)
+            try:
+                await redis_session.call_tool(
+                    "create_vector_index_hash",
+                    {
+                        "index_name": "idx:chunks",
+                        "prefix": "doc:paper:",
+                        "dim": EMBEDDING_DIMS,
+                    },
+                )
+            except Exception as e:
+                # Often throws if it already exists, which is fine
+                print(f"Vector index creation note: {e}")
+
+            # Store paper metadata
+            meta_to_store = paper_meta or {
+                "paper_id": paper_id,
+                "pdf_url": pdf_url,
             }
-            for i, chunk in enumerate(raw_chunks)
-        ]
+            await redis_session.call_tool(
+                "json_set",
+                {
+                    "name": f"paper:{paper_id}",
+                    "path": "$",
+                    "value": json.dumps(meta_to_store),
+                },
+            )
+
+            # Store each chunk: text metadata + embedding vector
+            for i, (chunk_text, vector) in enumerate(zip(chunks, vectors)):
+                redis_key = f"{REDIS_PREFIX}paper:{paper_id}:chunk:{i}"
+
+                # Store text fields in hash
+                await redis_session.call_tool(
+                    "hset", {"name": redis_key, "key": "text", "value": chunk_text}
+                )
+                await redis_session.call_tool(
+                    "hset", {"name": redis_key, "key": "paper_id", "value": paper_id}
+                )
+                await redis_session.call_tool(
+                    "hset", {"name": redis_key, "key": "chunk_index", "value": str(i)}
+                )
+
+                # Store embedding vector
+                await redis_session.call_tool(
+                    "set_vector_in_hash",
+                    {
+                        "name": redis_key,
+                        "vector": vector,
+                    },
+                )
+
+        # ── Step 6: Mark as indexed locally ───────────────────────────
+        _update_indexed_flag(paper_id)
 
         return json.dumps(
             {
                 "status": "ok",
                 "paper_id": paper_id,
+                "title": (paper_meta or {}).get("title", "Unknown"),
                 "total_chunks": len(chunks),
-                "chunks": chunks,
+                "message": f"Successfully indexed {len(chunks)} chunks into Redis",
+            }
+        )
+
+    except Exception as e:
+        return json.dumps({"status": "error", "paper_id": paper_id, "error": str(e)})
+
+
+@mcp.tool()
+async def query_paper(question: str, paper_id: str = "") -> str:
+    """
+    Answer a question about an indexed paper by searching Redis embeddings.
+    Embeds the question, performs vector similarity search in Redis,
+    and returns the most relevant chunks.
+
+    Args:
+        question: The question to answer about the paper
+        paper_id: Optional arXiv paper ID to scope the search.
+                  If empty, searches across all indexed papers.
+
+    Returns:
+        JSON with the top matching chunks and their text content
+    """
+    try:
+        # ── Step 1: Embed the question ────────────────────────────────
+        query_vector = _get_embedding(question)
+
+        # ── Step 2: Search Redis via MCP sub-session ──────────────────
+        async with AsyncExitStack() as stack:
+            redis_session = await _get_redis_session(stack)
+
+            # Vector similarity search
+            search_result = await redis_session.call_tool(
+                "vector_search_hash",
+                {
+                    "index_name": "idx:chunks",
+                    "query_vector": query_vector,
+                    "k": 5,
+                    "return_fields": ["text", "chunk_index", "paper_id"]
+                },
+            )
+
+            # Parse results and fetch chunk texts
+            results = []
+            if search_result and search_result.content:
+                for item in search_result.content:
+                    if hasattr(item, "text"):
+                        try:
+                            parsed = json.loads(item.text)
+                            if isinstance(parsed, list):
+                                for doc in parsed:
+                                    # Extract fields which are inside doc["payload"]
+                                    payload = doc.get("payload") or {}
+                                    if paper_id and paper_id != "all":
+                                        if payload.get("paper_id") == paper_id:
+                                            results.append(doc)
+                                    else:
+                                        results.append(doc)
+                            else:
+                                results.append(parsed)
+                        except (json.JSONDecodeError, TypeError):
+                            results.append({"raw": item.text})
+
+        return json.dumps(
+            {
+                "status": "ok",
+                "question": question,
+                "paper_id": paper_id or "all",
+                "results": results,
             },
             ensure_ascii=False,
         )
 
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
-
-
-@mcp.tool()
-def embed_chunk(text: str) -> str:
-    """
-    Step 2 of indexing: Generate embedding vector for a single chunk.
-    Call this once per chunk, then store the result with RedisMCPServer tools.
-
-    After calling this tool:
-      - Call RedisMCPServer:set_vector_in_hash(name=redis_key, vector=<returned vector>)
-
-    Args:
-        text: The chunk text to embed
-
-    Returns:
-        JSON with the embedding vector as a list of floats
-    """
-    try:
-        vector = _get_embedding(text)
-        return json.dumps({"status": "ok", "vector": vector})
-    except Exception as e:
-        return json.dumps({"status": "error", "error": str(e)})
-
-
-@mcp.tool()
-def mark_paper_indexed(paper_id: str) -> str:
-    """
-    Step 3 of indexing: Mark a paper as fully indexed in local metadata.
-    Call this after all chunks have been embedded and stored in Redis.
-
-    Args:
-        paper_id: arXiv paper ID
-
-    Returns:
-        Status message
-    """
-    _update_indexed_flag(paper_id)
-    return f"Paper '{paper_id}' marked as indexed."
 
 
 if __name__ == "__main__":

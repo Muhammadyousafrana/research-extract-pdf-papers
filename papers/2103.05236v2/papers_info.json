@@ -1,0 +1,16 @@
+{
+  "2103.05236v2": {
+    "title": "GAN Vocoder: Multi-Resolution Discriminator Is All You Need",
+    "authors": [
+      "Jaeseong You",
+      "Dalhyun Kim",
+      "Gyuhyeon Nam",
+      "Geumbyeol Hwang",
+      "Gyeongsu Chae"
+    ],
+    "summary": "Several of the latest GAN-based vocoders show remarkable achievements, outperforming autoregressive and flow-based competitors in both qualitative and quantitative measures while synthesizing orders of magnitude faster. In this work, we hypothesize that the common factor underlying their success is the multi-resolution discriminating framework, not the minute details in architecture, loss function, or training strategy. We experimentally test the hypothesis by evaluating six different generators paired with one shared multi-resolution discriminating framework. For all evaluative measures with respect to text-to-speech syntheses and for all perceptual metrics, their performances are not distinguishable from one another, which supports our hypothesis.",
+    "pdf_url": "https://arxiv.org/pdf/2103.05236v2",
+    "published": "2021-03-09",
+    "indexed": false
+  }
+}
