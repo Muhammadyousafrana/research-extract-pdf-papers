@@ -177,15 +177,17 @@ This repository includes an `azure-pipelines.yml` file for CI/CD via Azure DevOp
 3. Create a new pipeline pointing to `azure-pipelines.yml`.
 4. In Azure Container Apps, configure the necessary secrets (`gemini-api-key`, `supabase-url`, etc.) and reference them in the pipeline.
 
-#### 2. GitHub Pages (Static Frontend only)
+#### 2. GitHub Container Registry (GHCR)
 
-The repository also includes a GitHub Action to deploy the `static/` directory to GitHub Pages.
+This repository includes a GitHub Action to build and push the Docker image to GHCR.
 
 **Setup:**
-1. Go to your GitHub repository **Settings** > **Pages**.
-2. Under **Build and deployment** > **Source**, select **GitHub Actions**.
-3. On the next push to `main`, the frontend will be deployed automatically.
-4. *Note:* The frontend on GitHub Pages still needs a running backend to function. Update the `BASE_URL` in the frontend code or configuration if necessary.
+1. The workflow runs automatically on every push to the `main` branch.
+2. The image will be available at `ghcr.io/<your-username>/research-extract-pdf-papers:latest`.
+3. You can pull and run the image using:
+   ```bash
+   docker pull ghcr.io/<your-username>/research-extract-pdf-papers:latest
+   ```
 
 ---
 
