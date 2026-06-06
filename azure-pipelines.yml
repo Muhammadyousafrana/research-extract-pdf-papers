@@ -1,0 +1,63 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # Container registry service connection
+  dockerRegistryServiceConnection: 'acr-service-connection'
+  imageRepository: 'research-chat'
+  containerRegistry: 'yourregistry.azurecr.io'
+  acrName: 'yourregistry'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+  # Azure Resource Manager connection
+  azureSubscription: 'azure-arm-service-connection'
+  containerAppName: 'research-chat-app'
+  resourceGroupName: 'your-resource-group'
+
+stages:
+- stage: Build
+  displayName: Build and push stage
+  jobs:
+  - job: Build
+    displayName: Build
+    steps:
+    - task: Docker@2
+      displayName: Build and push an image to container registry
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
+          latest
+
+- stage: Deploy
+  displayName: Deploy to Azure Container Apps
+  dependsOn: Build
+  condition: succeeded()
+  jobs:
+  - job: Deploy
+    displayName: Deploy
+    steps:
+    - task: AzureContainerApps@1
+      displayName: Deploy to Azure Container Apps
+      inputs:
+        azureSubscription: $(azureSubscription)
+        acrName: $(acrName)
+        imageToDeploy: $(containerRegistry)/$(imageRepository):$(tag)
+        containerAppName: $(containerAppName)
+        resourceGroup: $(resourceGroupName)
+        containerAppEnvironment: 'your-aca-environment'
+        # Environment variables for the container app
+        # These should ideally be secrets in ACA linked to a Key Vault
+        envVars: |
+          GEMINI_API_KEY=secretref:gemini-api-key
+          SUPABASE_URL=secretref:supabase-url
+          SUPABASE_KEY=secretref:supabase-key
+          RESEND_API_KEY=secretref:resend-api-key
+          BASE_URL=https://$(containerAppName).your-region.azurecontainerapps.io
