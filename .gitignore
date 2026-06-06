@@ -90,5 +90,13 @@ Desktop.ini
 
 # Project-specific
 research-extract-pdf-papers.log
+papers/
+*_err.txt
+*_out.txt
+stderr.txt
+stdout.txt
+err*.txt
+out*.txt
+*.png
 
 supabase_schema.sql

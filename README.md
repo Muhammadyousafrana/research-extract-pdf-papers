@@ -1,3 +1,6 @@
+[![Copilot coding agent](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-swe-agent/copilot/badge.svg)](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-swe-agent/copilot)
+[![Copilot code review](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer/badge.svg)](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer)
+[![Build and Push to GHCR](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/deploy-ghcr.yml/badge.svg)](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/deploy-ghcr.yml)
 # research-extract-pdf-papers
 
 > **MCP server that searches arXiv for research papers, downloads their PDFs, extracts structured content, and indexes it with semantic embeddings — all through a Model Context Protocol (MCP) interface.**
@@ -31,6 +34,7 @@
 - **Embed** chunks using configurable embedding models (Google Gemini, Voyage AI, or OpenAI).
 - **Store** embeddings in Redis for later semantic retrieval.
 - **Retrieve** saved paper metadata by paper ID.
+- **Web Interface** — A modern FastAPI-based web application for chatting with research papers.
 
 ### Primary Use Cases
 
@@ -138,21 +142,55 @@ uv pip install .
 
 # 4. Copy and configure environment variables
 cp .env.example .env          # create .env from the example (see Configuration section)
-# Edit .env and fill in at least one embedding API key
+# Edit .env and fill in all necessary API keys (Gemini, Supabase, Resend)
 
-# 5. Run the MCP server (stdio transport — suitable for MCP clients)
-python research_server.py
+# 5. Run the Web Interface (FastAPI)
+make web
+# The app will be available at http://127.0.0.1:8080
 ```
 
 ### Docker setup
 
 ```bash
 # Build the image
-docker build -t research-mcp .
+docker build -t research-chat .
 
 # Run (pass env vars at runtime)
-docker run --rm -e GEMINI_API_KEY=your_key research-mcp
+docker run --rm -p 8080:8080 \
+  -e GEMINI_API_KEY=your_key \
+  -e SUPABASE_URL=your_url \
+  -e SUPABASE_KEY=your_key \
+  research-chat
 ```
+
+### Deployment
+
+#### 1. Azure Container Apps (Backend + Frontend)
+
+This repository includes an `azure-pipelines.yml` file for CI/CD via Azure DevOps.
+
+**Prerequisites:**
+- An Azure Container Registry (ACR).
+- An Azure Container App (ACA) and its Environment.
+- Azure DevOps Service Connections for ACR and Azure Resource Manager (ARM).
+
+**Setup:**
+1. Import this repository into your Azure DevOps project.
+2. Update the variables in `azure-pipelines.yml` with your own values (ACR name, Resource Group, etc.).
+3. Create a new pipeline pointing to `azure-pipelines.yml`.
+4. In Azure Container Apps, configure the necessary secrets (`gemini-api-key`, `supabase-url`, etc.) and reference them in the pipeline.
+
+#### 2. GitHub Container Registry (GHCR)
+
+This repository includes a GitHub Action to build and push the Docker image to GHCR.
+
+**Setup:**
+1. The workflow runs automatically on every push to the `main` branch.
+2. The image will be available at `ghcr.io/<your-username>/research-extract-pdf-papers:latest`.
+3. You can pull and run the image using:
+   ```bash
+   docker pull ghcr.io/<your-username>/research-extract-pdf-papers:latest
+   ```
 
 ---
 
@@ -250,16 +288,19 @@ Configuration is provided via environment variables (loaded automatically with `
 | Variable | Required | Description |
 |---|---|---|
 | `GEMINI_API_KEY` | If using Gemini | API key for Google Gemini embeddings |
-| `VOYAGE_API_KEY` | If using Voyage | API key for Voyage AI embeddings |
-| `OPENAI_API_KEY` | If using OpenAI | API key for OpenAI embeddings |
+| `SUPABASE_URL` | Yes | Your Supabase project URL |
+| `SUPABASE_KEY` | Yes | Your Supabase API key |
+| `RESEND_API_KEY` | Yes | Your Resend API key for verification emails |
+| `BASE_URL` | Yes | Base URL for verification links (e.g., http://127.0.0.1:8080) |
 
 Create a `.env` file in the project root:
 
 ```dotenv
-# .env — fill in whichever embedding provider you use
 GEMINI_API_KEY=your_gemini_key_here
-# VOYAGE_API_KEY=your_voyage_key_here
-# OPENAI_API_KEY=your_openai_key_here
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+RESEND_API_KEY=your_resend_api_key
+BASE_URL=http://127.0.0.1:8080
 ```
 
 ### Embedding model selection
