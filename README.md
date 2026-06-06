@@ -1,3 +1,5 @@
+[![Copilot coding agent](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-swe-agent/copilot/badge.svg)](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-swe-agent/copilot)
+[![Copilot code review](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer/badge.svg)](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer)
 # research-extract-pdf-papers
 
 > **MCP server that searches arXiv for research papers, downloads their PDFs, extracts structured content, and indexes it with semantic embeddings — all through a Model Context Protocol (MCP) interface.**
