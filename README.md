@@ -152,11 +152,44 @@ make web
 
 ```bash
 # Build the image
-docker build -t research-mcp .
+docker build -t research-chat .
 
 # Run (pass env vars at runtime)
-docker run --rm -e GEMINI_API_KEY=your_key research-mcp
+docker run --rm -p 8080:8080 \
+  -e GEMINI_API_KEY=your_key \
+  -e SUPABASE_URL=your_url \
+  -e SUPABASE_KEY=your_key \
+  research-chat
 ```
+
+### Deployment
+
+#### 1. Azure Container Apps (Backend + Frontend)
+
+This repository includes an `azure-pipelines.yml` file for CI/CD via Azure DevOps.
+
+**Prerequisites:**
+- An Azure Container Registry (ACR).
+- An Azure Container App (ACA) and its Environment.
+- Azure DevOps Service Connections for ACR and Azure Resource Manager (ARM).
+
+**Setup:**
+1. Import this repository into your Azure DevOps project.
+2. Update the variables in `azure-pipelines.yml` with your own values (ACR name, Resource Group, etc.).
+3. Create a new pipeline pointing to `azure-pipelines.yml`.
+4. In Azure Container Apps, configure the necessary secrets (`gemini-api-key`, `supabase-url`, etc.) and reference them in the pipeline.
+
+#### 2. GitHub Container Registry (GHCR)
+
+This repository includes a GitHub Action to build and push the Docker image to GHCR.
+
+**Setup:**
+1. The workflow runs automatically on every push to the `main` branch.
+2. The image will be available at `ghcr.io/<your-username>/research-extract-pdf-papers:latest`.
+3. You can pull and run the image using:
+   ```bash
+   docker pull ghcr.io/<your-username>/research-extract-pdf-papers:latest
+   ```
 
 ---
 

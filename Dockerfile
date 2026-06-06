@@ -1,11 +1,13 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_HOME=/app \
-    APP_ENTRYPOINT=main.py
+    APP_ENTRYPOINT=web_app.py
 
 WORKDIR ${APP_HOME}
+
+EXPOSE 8080
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
