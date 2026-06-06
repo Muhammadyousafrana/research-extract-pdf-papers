@@ -1,0 +1,1286 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Paper Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f1a;
+  --bg-sidebar:#0a0a14;
+  --bg-card:rgba(255,255,255,0.04);
+  --bg-card-hover:rgba(255,255,255,0.07);
+  --bg-input:rgba(255,255,255,0.06);
+  --border:rgba(255,255,255,0.08);
+  --border-hover:rgba(255,255,255,0.14);
+  --primary:#6366f1;
+  --primary-hover:#818cf8;
+  --primary-dim:rgba(99,102,241,0.15);
+  --secondary:#06b6d4;
+  --accent:#a855f7;
+  --success:#22c55e;
+  --success-dim:rgba(34,197,94,0.12);
+  --warning:#f59e0b;
+  --warning-dim:rgba(245,158,11,0.12);
+  --error:#ef4444;
+  --error-dim:rgba(239,68,68,0.12);
+  --text:#e2e8f0;
+  --text-secondary:#94a3b8;
+  --text-muted:#64748b;
+  --radius:12px;
+  --radius-sm:8px;
+  --radius-full:9999px;
+  --shadow-card:0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg:0 10px 40px rgba(0,0,0,0.4);
+  --transition:200ms cubic-bezier(0.4,0,0.2,1);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --sidebar-w:280px;
+  --log-w:300px
+}
+html,body{height:100%}
+body{font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow:hidden}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.2)}
+::selection{background:var(--primary);color:#fff}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.875em;background:rgba(255,255,255,0.06);padding:0.15em 0.4em;border-radius:4px}
+
+.app{display:flex;height:100vh}
+
+/* ── Left Sidebar ── */
+.sidebar{
+  width:var(--sidebar-w);
+  background:var(--bg-sidebar);
+  border-right:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  flex-shrink:0
+}
+.sidebar-header{
+  padding:16px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px
+}
+.sidebar-header h1{font-size:1rem;font-weight:700;background:linear-gradient(135deg,var(--text),var(--primary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.new-chat-btn{
+  width:32px;height:32px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--bg-input);
+  color:var(--text-secondary);
+  font-size:1.1rem;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--transition)
+}
+.new-chat-btn:hover{background:var(--bg-card-hover);color:var(--text);border-color:var(--border-hover)}
+.conv-list{flex:1;overflow-y:auto;padding:8px}
+.conv-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  transition:all var(--transition);
+  margin-bottom:2px;
+  position:relative
+}
+.conv-item:hover{background:var(--bg-card)}
+.conv-item.active{background:var(--primary-dim);border:1px solid rgba(99,102,241,0.2)}
+.conv-item .conv-title{flex:1;font-size:0.8125rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)}
+.conv-item.active .conv-title{color:var(--text)}
+.conv-item .conv-delete{
+  opacity:0;
+  width:20px;height:20px;
+  border:none;background:none;
+  color:var(--text-muted);
+  cursor:pointer;
+  font-size:0.9rem;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:4px;
+  transition:all var(--transition);
+  flex-shrink:0
+}
+.conv-item:hover .conv-delete{opacity:1}
+.conv-item .conv-delete:hover{color:var(--error);background:var(--error-dim)}
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:0.75rem;color:var(--text-muted);text-align:center}
+
+/* ── Main area ── */
+.main{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-width:0
+}
+.chat-header{
+  padding:14px 24px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-shrink:0
+}
+.chat-header .chat-title{font-size:0.95rem;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-header .chat-meta{font-size:0.75rem;color:var(--text-muted);white-space:nowrap}
+.messages-area{
+  flex:1;
+  overflow-y:auto;
+  padding:24px 24px 8px
+}
+.messages-area:empty{display:flex;align-items:center;justify-content:center}
+.messages-area:empty::after{
+  content:"Send a message to start chatting. Try /search machine learning or ask a question about indexed papers.";
+  color:var(--text-muted);
+  font-size:0.875rem;
+  text-align:center;
+  max-width:400px;
+  line-height:1.6
+}
+
+/* ── Messages ── */
+.msg{display:flex;gap:12px;margin-bottom:24px;animation:fadeIn 300ms ease}
+.msg.user{flex-direction:row-reverse}
+.msg-avatar{
+  width:32px;height:32px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.8rem;
+  flex-shrink:0;
+  margin-top:2px
+}
+.msg.user .msg-avatar{background:var(--primary);color:#fff}
+.msg.assistant .msg-avatar{background:rgba(255,255,255,0.08);color:var(--text-secondary)}
+.msg-bubble{
+  max-width:75%;
+  min-width:0
+}
+.msg.user .msg-bubble{
+  background:var(--primary-dim);
+  border:1px solid rgba(99,102,241,0.2);
+  border-radius:16px 16px 4px 16px;
+  padding:10px 16px;
+  font-size:0.875rem;
+  line-height:1.6
+}
+.msg.assistant .msg-bubble{font-size:0.875rem;line-height:1.7;word-wrap:break-word}
+.msg.assistant .msg-bubble p{margin-bottom:8px}
+.msg.assistant .msg-bubble p:last-child{margin-bottom:0}
+.msg.assistant .msg-bubble strong{color:var(--text)}
+.msg.assistant .msg-bubble em{color:var(--text-secondary)}
+.msg-time{font-size:0.6875rem;color:var(--text-muted);margin-top:4px;padding:0 4px}
+
+/* ── Rich message cards ── */
+.rich-card{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+  margin:8px 0;
+  background:var(--bg-card);
+  transition:border-color var(--transition)
+}
+.rich-card:hover{border-color:var(--border-hover)}
+.rich-card-header{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;
+  border-bottom:1px solid var(--border);
+  font-size:0.8125rem;
+  font-weight:600;
+  flex-wrap:wrap
+}
+.rich-card-body{padding:10px 14px}
+.paper-chip{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 12px;
+  margin-bottom:4px;
+  background:var(--bg-input);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  font-size:0.8125rem;
+  transition:all var(--transition);
+  flex-wrap:wrap
+}
+.paper-chip:hover{background:var(--bg-card-hover)}
+.paper-chip .paper-id{font-family:monospace;font-weight:600;color:var(--primary)}
+.paper-chip .paper-actions{display:flex;gap:4px}
+.chip-btn{
+  padding:3px 8px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--text-secondary);
+  font-size:0.75rem;
+  cursor:pointer;
+  transition:all var(--transition);
+  font-family:var(--font)
+}
+.chip-btn:hover{background:var(--bg-card-hover);color:var(--text)}
+.chip-btn.primary{background:var(--primary-dim);color:var(--primary);border-color:rgba(99,102,241,0.3)}
+.chip-btn.primary:hover{background:var(--primary);color:#fff}
+.query-result-item{margin-bottom:8px}
+.query-result-item:last-child{margin-bottom:0}
+.query-result-item details{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg-input)}
+.query-result-item details[open]{background:var(--bg-card)}
+.query-result-item summary{
+  padding:8px 12px;cursor:pointer;font-size:0.8125rem;
+  display:flex;align-items:center;gap:8px;user-select:none
+}
+.query-result-item .result-text{padding:8px 12px;border-top:1px solid var(--border)}
+.query-result-item .result-text pre{
+  font-size:0.75rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;
+  color:var(--text-secondary);max-height:200px;overflow-y:auto
+}
+.badge{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:2px 7px;border-radius:var(--radius-full);
+  font-size:0.6875rem;font-weight:600;white-space:nowrap
+}
+.badge-primary{background:var(--primary-dim);color:var(--primary)}
+.badge-success{background:var(--success-dim);color:var(--success)}
+.badge-warning{background:var(--warning-dim);color:var(--warning)}
+.badge-muted{background:rgba(255,255,255,0.06);color:var(--text-muted)}
+.badge-error{background:var(--error-dim);color:var(--error)}
+.badge-info{background:rgba(59,130,246,0.12);color:#60a5fa}
+
+/* ── Input area ── */
+.input-area{
+  padding:16px 24px 24px;
+  flex-shrink:0
+}
+.input-wrapper{
+  display:flex;gap:8px;
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:8px;
+  transition:all var(--transition);
+  align-items:flex-end
+}
+.input-wrapper:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-dim)}
+.input-wrapper textarea{
+  flex:1;
+  border:none;
+  background:transparent;
+  color:var(--text);
+  font-family:var(--font);
+  font-size:0.875rem;
+  resize:none;
+  outline:none;
+  min-height:24px;
+  max-height:120px;
+  padding:4px 8px;
+  line-height:1.5
+}
+.input-wrapper textarea::placeholder{color:var(--text-muted)}
+.input-wrapper textarea:disabled{opacity:0.5}
+.send-btn{
+  width:36px;height:36px;
+  border-radius:var(--radius-sm);
+  border:none;
+  background:var(--primary);
+  color:#fff;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--transition);
+  flex-shrink:0;
+  font-size:1rem
+}
+.send-btn:hover{background:var(--primary-hover);transform:scale(1.05)}
+.send-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.input-hint{padding:6px 12px 0;font-size:0.6875rem;color:var(--text-muted)}
+.slash-hint{display:none;padding:4px 12px;gap:4px;font-size:0.75rem;flex-wrap:wrap}
+.slash-hint.show{display:flex}
+.slash-cmd{
+  padding:2px 8px;border-radius:6px;background:var(--primary-dim);
+  color:var(--primary);font-family:monospace;font-size:0.6875rem;
+  cursor:pointer;border:1px solid rgba(99,102,241,0.2);transition:all var(--transition)
+}
+.slash-cmd:hover{background:var(--primary);color:#fff}
+.typing-indicator{display:flex;gap:4px;padding:12px 0;align-items:center}
+.typing-indicator .dot{width:6px;height:6px;border-radius:50%;background:var(--text-muted);animation:pulse 1.4s infinite}
+.typing-indicator .dot:nth-child(2){animation-delay:0.2s}
+.typing-indicator .dot:nth-child(3){animation-delay:0.4s}
+.typing-tool-name{font-size:0.75rem;color:var(--text-muted);margin-left:8px;font-style:italic}
+@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Right sidebar (logs) ── */
+.log-sidebar{
+  width:var(--log-w);
+  background:var(--bg-sidebar);
+  border-left:1px solid var(--border);
+  display:none;
+  flex-direction:column;
+  flex-shrink:0
+}
+.log-sidebar.show{display:flex}
+.log-header{
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0
+}
+.log-header h2{font-size:0.8125rem;font-weight:600;color:var(--text-secondary)}
+.log-clear-btn{
+  border:none;background:none;color:var(--text-muted);
+  cursor:pointer;font-size:0.75rem;padding:2px 6px;border-radius:4px;transition:all var(--transition)
+}
+.log-clear-btn:hover{color:var(--text);background:var(--bg-card)}
+.log-list{
+  flex:1;overflow-y:auto;padding:8px
+}
+.log-list:empty::after{
+  content:"Tool activity will appear here";
+  display:block;padding:24px 16px;text-align:center;color:var(--text-muted);font-size:0.75rem
+}
+.log-entry{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:8px 10px;
+  margin-bottom:4px;
+  border-radius:var(--radius-sm);
+  font-size:0.75rem;
+  animation:fadeIn 200ms ease;
+  line-height:1.5
+}
+.log-entry:hover{background:var(--bg-card)}
+.log-entry .log-icon{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:0.6rem;flex-shrink:0;margin-top:1px}
+.log-entry.running .log-icon{background:var(--primary-dim);color:var(--primary);animation:spin 1s linear infinite}
+.log-entry.done .log-icon{background:var(--success-dim);color:var(--success)}
+.log-entry.error .log-icon{background:var(--error-dim);color:var(--error)}
+.log-entry .log-content{flex:1;min-width:0}
+.log-entry .log-tool{font-weight:600;color:var(--primary)}
+.log-entry .log-status{color:var(--text-secondary)}
+.log-entry .log-message{color:var(--text-muted);word-break:break-word}
+.log-entry .log-time{font-size:0.625rem;color:var(--text-muted);white-space:nowrap;flex-shrink:0}
+
+
+
+@media(max-width:1024px){
+  :root{--log-w:0px}
+  .log-sidebar{display:none}
+  .log-toggle-btn{display:none}
+}
+/* Auth Modal */
+.auth-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:1000}
+.auth-modal{background:var(--bg);border:1px solid var(--border);border-radius:16px;width:400px;max-width:90vw;max-height:90vh;overflow-y:auto}
+.auth-tabs{display:flex;border-bottom:1px solid var(--border)}
+.auth-tab{flex:1;padding:14px;background:none;border:none;color:var(--text-muted);font-size:14px;font-weight:500;cursor:pointer;transition:var(--transition);font-family:var(--font)}
+.auth-tab.active{color:var(--text);border-bottom:2px solid var(--primary)}
+.auth-form{padding:28px}
+.auth-form h2{font-size:20px;margin-bottom:4px}
+.auth-subtitle{color:var(--text-secondary);font-size:14px;margin-bottom:20px;line-height:1.5}
+.auth-field{margin-bottom:16px}
+.auth-field label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text-secondary)}
+.auth-field input{width:100%;padding:10px 14px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px;outline:none;transition:var(--transition);font-family:var(--font)}
+.auth-field input:focus{border-color:var(--primary)}
+.auth-btn{width:100%;padding:11px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;transition:var(--transition);font-family:var(--font)}
+.auth-btn:hover{background:var(--primary-hover)}
+.auth-error{color:var(--error);font-size:13px;margin-bottom:12px;display:none}
+
+/* ── Paper Selection Modal ── */
+.paper-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:2000}
+.paper-modal{border:1px solid var(--border);border-radius:16px;width:520px;max-width:92vw;max-height:85vh;overflow:hidden;display:flex;flex-direction:column}
+.paper-modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.paper-modal-header h2{font-size:1rem;font-weight:700}
+.paper-modal-close{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.9rem;transition:all var(--transition)}
+.paper-modal-close:hover{background:var(--bg-card-hover);color:var(--text)}
+.paper-modal-list{flex:1;overflow-y:auto;padding:8px}
+.paper-option{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:4px;border-radius:var(--radius-sm);cursor:pointer;transition:all var(--transition);border:1px solid transparent}
+.paper-option:hover{background:var(--bg-card);border-color:var(--border)}
+.paper-option .po-id{font-family:monospace;font-size:0.75rem;color:var(--primary);font-weight:600;white-space:nowrap;flex-shrink:0}
+.paper-option .po-title{font-size:0.85rem;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.paper-option .po-select{padding:4px 12px;border-radius:6px;border:none;background:var(--primary);color:#fff;font-size:0.75rem;cursor:pointer;font-weight:600;transition:all var(--transition);flex-shrink:0}
+.paper-option .po-select:hover{background:var(--primary-hover)}
+.paper-modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:0.75rem;color:var(--text-muted)}
+
+/* ── Suggested Questions ── */
+.suggested-q{display:inline-block;padding:6px 14px;border-radius:var(--radius-full);background:var(--primary-dim);border:1px solid rgba(99,102,241,0.25);color:var(--primary);font-size:0.8125rem;cursor:pointer;transition:all var(--transition);font-family:var(--font);user-select:none}
+.suggested-q:hover{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* ── Active Paper Indicator ── */
+.active-paper-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--radius-full);background:var(--success-dim);border:1px solid rgba(34,197,94,0.2);font-size:0.75rem;color:var(--success);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+
+@media(max-width:768px){
+  :root{--sidebar-w:0px}
+  .sidebar{display:none}
+  .sidebar.open{display:flex;position:fixed;inset:0;z-index:100;width:100%}
+  .msg-bubble{max-width:90%}
+  .input-area{padding:12px 16px 16px}
+  .messages-area{padding:16px 16px 4px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Left Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>Research Chat</h1>
+      <button class="new-chat-btn" onclick="newConversation()" title="New chat">+</button>
+    </div>
+    <div class="conv-list" id="conv-list"></div>
+    <div class="sidebar-footer" id="sidebar-footer">
+      <div id="user-info" style="display:none;padding:10px 14px;border-top:1px solid var(--border);margin-top:auto">
+        <div id="user-email" style="font-size:0.75rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+        <button onclick="handleLogout()" style="background:none;border:none;color:var(--error);font-size:0.75rem;cursor:pointer;padding:4px 0 0 0;font-family:var(--font)">Sign Out</button>
+      </div>
+      <div style="padding:10px 14px;border-top:1px solid var(--border);font-size:0.7rem;color:var(--text-muted);text-align:center">Supabase &bull; Gemini &bull; Redis</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="chat-header">
+      <button class="new-chat-btn" style="display:none" id="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
+      <div class="chat-title" id="chat-title">New Chat</div>
+      <div id="active-paper-badge" style="display:none"></div>
+      <div class="chat-meta" id="chat-meta"></div>
+    </div>
+    <div class="messages-area" id="messages-area"></div>
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea id="msg-input" rows="1" placeholder='Type a message or use /search, /info, /query...' onkeydown="handleKey(event)" oninput="handleSlash()" disabled></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>&#10148;</button>
+      </div>
+      <div class="slash-hint" id="slash-hint">
+        <span class="slash-cmd" onclick="insertSlash('/search ')">/search</span>
+        <span class="slash-cmd" onclick="insertSlash('/info ')">/info</span>
+        <span class="slash-cmd" onclick="insertSlash('/query ')">/query</span>
+        <span class="slash-cmd" onclick="insertSlash('/index ')">/index</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right sidebar (logs) -->
+  <aside class="log-sidebar" id="log-sidebar">
+    <div class="log-header">
+      <h2>Tool Activity</h2>
+      <button class="log-clear-btn" onclick="clearLogs()">Clear</button>
+    </div>
+    <div class="log-list" id="log-list"></div>
+  </aside>
+</div>
+
+<!-- Auth Modal -->
+<div id="auth-overlay" class="auth-overlay">
+  <div class="auth-modal">
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Sign Up</button>
+    </div>
+    <!-- Login Form -->
+    <form id="login-form" class="auth-form" onsubmit="handleLogin(event)">
+      <h2>Welcome Back</h2>
+      <p class="auth-subtitle">Sign in to your account to continue.</p>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" required>
+      </div>
+      <div class="auth-field" style="position:relative">
+        <label>Password</label>
+        <div style="position:relative">
+          <input type="password" id="login-password" placeholder="Enter password" required style="padding-right:40px">
+          <span onclick="togglePw('login-password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text-muted);font-size:14px;user-select:none">&#128065;</span>
+        </div>
+      </div>
+      <div style="text-align:right;margin-bottom:12px">
+        <a onclick="showForgotPassword()" style="color:var(--primary);font-size:13px;cursor:pointer">Forgot password?</a>
+      </div>
+      <div class="auth-error" id="login-error"></div>
+      <button type="submit" class="auth-btn">Sign In</button>
+      <div style="text-align:center;margin-top:16px;font-size:13px">
+        <a href="/admin" style="color:var(--text-muted);text-decoration:none">Admin Login &rarr;</a>
+      </div>
+    </form>
+    <!-- Register Form -->
+    <form id="register-form" class="auth-form" style="display:none" onsubmit="handleRegister(event)">
+      <h2>Create Account</h2>
+      <p class="auth-subtitle">Sign up to start chatting with research papers.</p>
+      <div class="auth-field">
+        <label>Username</label>
+        <input type="text" id="reg-username" placeholder="Choose a username" required>
+      </div>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="you@example.com" required>
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <div style="position:relative">
+          <input type="password" id="reg-password" placeholder="Min 8 characters" required style="padding-right:40px">
+          <span onclick="togglePw('reg-password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text-muted);font-size:14px;user-select:none">&#128065;</span>
+        </div>
+      </div>
+      <div class="auth-error" id="register-error"></div>
+      <button type="submit" class="auth-btn">Create Account</button>
+    </form>
+    <!-- Verification message (shown after register) -->
+    <div id="verify-message" style="display:none;text-align:center;padding:20px;">
+      <div style="font-size:48px;margin-bottom:16px">&#9989;</div>
+      <h2>Account Created!</h2>
+      <div id="verify-link-container" style="margin-top:16px"></div>
+    </div>
+    <!-- Forgot Password -->
+    <div id="forgot-password-form" style="display:none;padding:28px">
+      <h2>Reset Password</h2>
+      <p class="auth-subtitle">Enter your email and we'll send a reset link.</p>
+      <div class="auth-field">
+        <label>Email</label>
+        <input type="email" id="forgot-email" placeholder="you@example.com" required>
+      </div>
+      <div class="auth-error" id="forgot-error"></div>
+      <div id="forgot-success" style="display:none;color:var(--success);font-size:14px;margin-bottom:12px">If that email is registered, a reset link has been sent.</div>
+      <button class="auth-btn" onclick="handleForgotPassword()">Send Reset Link</button>
+      <div style="text-align:center;margin-top:16px">
+        <a onclick="switchAuthTab('login')" style="color:var(--primary);font-size:13px;cursor:pointer">Back to Sign In</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Paper Selection Modal -->
+<div id="paper-modal-overlay" class="paper-modal-overlay" style="display:none">
+  <div class="paper-modal" style="background:var(--bg)">
+    <div class="paper-modal-header">
+      <h2>Select a Paper</h2>
+      <button class="paper-modal-close" onclick="closePaperModal()">&#10005;</button>
+    </div>
+    <div class="paper-modal-list" id="paper-modal-list"></div>
+    <div class="paper-modal-footer">Click "Select" to index and start asking questions about a paper</div>
+  </div>
+</div>
+
+<script>
+var currentConvId = null;
+var conversations = [];
+var loading = false;
+var logSource = null;
+var logCount = 0;
+var authToken = localStorage.getItem('auth_token') || null;
+
+// ── Auth ──
+function togglePw(id, el) {
+  var inp = document.getElementById(id);
+  if (inp.type === 'password') { inp.type = 'text'; el.innerHTML = '&#128064;'; }
+  else { inp.type = 'password'; el.innerHTML = '&#128065;'; }
+}
+
+function switchAuthTab(tab) {
+  document.getElementById('tab-login').className = tab === 'login' ? 'auth-tab active' : 'auth-tab';
+  document.getElementById('tab-register').className = tab === 'register' ? 'auth-tab active' : 'auth-tab';
+  document.getElementById('login-form').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? 'block' : 'none';
+  document.getElementById('verify-message').style.display = 'none';
+  document.getElementById('forgot-password-form').style.display = 'none';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('register-error').style.display = 'none';
+  document.getElementById('forgot-error').style.display = 'none';
+  document.getElementById('forgot-success').style.display = 'none';
+}
+
+function showForgotPassword() {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('verify-message').style.display = 'none';
+  document.getElementById('forgot-password-form').style.display = 'block';
+  document.getElementById('forgot-error').style.display = 'none';
+  document.getElementById('forgot-success').style.display = 'none';
+}
+
+async function handleForgotPassword() {
+  var email = document.getElementById('forgot-email').value.trim();
+  var errEl = document.getElementById('forgot-error');
+  errEl.style.display = 'none';
+  if (!email) { errEl.textContent = 'Enter your email'; errEl.style.display = 'block'; return; }
+  try {
+    var res = await fetch('/api/auth/forgot-password', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: email})
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    document.getElementById('forgot-success').style.display = 'block';
+    document.querySelector('#forgot-password-form .auth-btn').disabled = true;
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  var email = document.getElementById('login-email').value.trim();
+  var password = document.getElementById('login-password').value;
+  var errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  try {
+    var res = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: email, password: password})
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Login failed');
+    authToken = data.token;
+    localStorage.setItem('auth_token', authToken);
+    document.getElementById('auth-overlay').style.display = 'none';
+    enableChat();
+    showUserInfo(data.user.email);
+    await loadConversations();
+    if (conversations.length > 0) {
+      await selectConversation(conversations[0].id);
+    } else {
+      await newConversation();
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  var username = document.getElementById('reg-username').value.trim();
+  var email = document.getElementById('reg-email').value.trim();
+  var password = document.getElementById('reg-password').value;
+  var errEl = document.getElementById('register-error');
+  errEl.style.display = 'none';
+  try {
+    var res = await fetch('/api/auth/register', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: username, email: email, password: password})
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Registration failed');
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('register-form').style.display = 'none';
+    document.getElementById('verify-message').style.display = 'block';
+    if (data.verification_link) {
+      document.getElementById('verify-link-container').innerHTML =
+        '<p style="color:var(--text-secondary);margin:12px 0">Or click directly:</p>' +
+        '<a href="' + escapeHtml(data.verification_link) + '" target="_blank" style="color:var(--primary);font-size:14px;word-break:break-all">' + escapeHtml(data.verification_link) + '</a>';
+    } else {
+      document.getElementById('verify-link-container').innerHTML =
+        '<p style="color:var(--text-secondary);margin:12px 0">Verification email sent to <strong>' + escapeHtml(email) + '</strong>. Check your inbox.</p>';
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function enableChat() {
+  document.getElementById('msg-input').disabled = false;
+  document.getElementById('send-btn').disabled = false;
+}
+
+var API = {
+  conversations: '/api/conversations',
+  messages: function(id) { return '/api/conversations/' + id + '/messages'; },
+  papers: function(id) { return '/api/conversations/' + id + '/papers'; },
+  logs: function(id) { return '/api/conversations/' + id + '/logs'; },
+};
+
+// ── Helpers ──
+function escapeHtml(t) {
+  var d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
+}
+
+function scrollBottom() {
+  var a = document.getElementById('messages-area');
+  requestAnimationFrame(function() { a.scrollTop = a.scrollHeight; });
+}
+
+function scrollLogs() {
+  var l = document.getElementById('log-list');
+  requestAnimationFrame(function() { l.scrollTop = l.scrollHeight; });
+}
+
+function formatTime(ts) {
+  try {
+    var d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch(e) { return ''; }
+}
+
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n) + '...' : s;
+}
+
+// ── Slash commands ──
+function handleSlash() {
+  var input = document.getElementById('msg-input');
+  var hint = document.getElementById('slash-hint');
+  var val = input.value.trim();
+  if (val.startsWith('/')) {
+    hint.classList.add('show');
+  } else {
+    hint.classList.remove('show');
+  }
+}
+
+function insertSlash(cmd) {
+  var input = document.getElementById('msg-input');
+  input.value = cmd;
+  input.focus();
+  document.getElementById('slash-hint').classList.remove('show');
+}
+
+function clearLogs() {
+  document.getElementById('log-list').innerHTML = '';
+  logCount = 0;
+}
+
+function addLogEntry(entry) {
+  var list = document.getElementById('log-list');
+  var div = document.createElement('div');
+  var iconMap = { running: '&#9898;', done: '&#10003;', error: '&#10007;' };
+  var icon = iconMap[entry.status] || '&#9679;';
+  div.className = 'log-entry ' + (entry.status || 'running');
+  div.innerHTML =
+    '<div class="log-icon">' + icon + '</div>' +
+    '<div class="log-content">' +
+      '<div><span class="log-tool">' + escapeHtml(entry.tool || '') + '</span> <span class="log-status">' + escapeHtml(entry.status || '') + '</span></div>' +
+      '<div class="log-message">' + escapeHtml(entry.message || '') + '</div>' +
+    '</div>' +
+    '<div class="log-time">' + (entry.timestamp ? formatTime(entry.timestamp) : '') + '</div>';
+  list.appendChild(div);
+  logCount++;
+  scrollLogs();
+}
+
+function connectLogStream() {
+  if (logSource) { logSource.close(); logSource = null; }
+  if (!currentConvId) return;
+  var url = API.logs(currentConvId);
+  logSource = new EventSource(url);
+  logSource.onmessage = function(e) {
+    try {
+      var entry = JSON.parse(e.data);
+      addLogEntry(entry);
+    } catch(err) {
+      console.error('Log parse error:', err);
+    }
+  };
+  logSource.onerror = function() {
+    // Will auto-reconnect
+  };
+}
+
+// ── API calls ──
+async function api(method, url, body) {
+  var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+  if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+  if (body) opts.body = JSON.stringify(body);
+  var res = await fetch(url, opts);
+  if (!res.ok) {
+    var msg = 'HTTP ' + res.status;
+    try { var e = await res.json(); msg = e.detail || msg; } catch(_) {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+// ── Conversation management ──
+async function loadConversations() {
+  try {
+    var data = await api('GET', API.conversations);
+    conversations = data.conversations || [];
+    renderConversations();
+  } catch(e) {
+    console.error('Failed to load conversations:', e);
+  }
+}
+
+function renderConversations() {
+  var list = document.getElementById('conv-list');
+  if (conversations.length === 0) {
+    list.innerHTML = '<div style="padding:24px 16px;text-align:center;color:var(--text-muted);font-size:0.8125rem">No conversations yet.<br>Start a new chat!</div>';
+    return;
+  }
+  list.innerHTML = conversations.map(function(c) {
+    var active = c.id === currentConvId ? ' active' : '';
+    return '<div class="conv-item' + active + '" onclick="selectConversation(\'' + c.id + '\')">' +
+      '<div class="conv-title">' + escapeHtml(c.title || 'New Chat') + '</div>' +
+      '<button class="conv-delete" onclick="event.stopPropagation();deleteConversation(\'' + c.id + '\')" title="Delete">&#10005;</button>' +
+    '</div>';
+  }).join('');
+}
+
+async function newConversation() {
+  try {
+    var conv = await api('POST', API.conversations);
+    conversations.unshift(conv);
+    renderConversations();
+    selectConversation(conv.id);
+  } catch(e) {
+    console.error('Failed to create conversation:', e);
+  }
+}
+
+async function selectConversation(id) {
+  if (loading) return;
+  currentConvId = id;
+  renderConversations();
+  document.getElementById('chat-title').textContent = 'Loading...';
+  document.getElementById('messages-area').innerHTML = '';
+  document.getElementById('msg-input').disabled = false;
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('msg-input').focus();
+  connectLogStream();
+
+  document.getElementById('active-paper-badge').style.display = 'none';
+
+  try {
+    var data = await api('GET', API.messages(id));
+    var conv = conversations.find(function(c) { return c.id === id; });
+    document.getElementById('chat-title').textContent = conv ? (conv.title || 'New Chat') : 'Chat';
+    renderMessages(data.messages || []);
+    loadActivePaper();
+  } catch(e) {
+    console.error('Failed to load messages:', e);
+    document.getElementById('messages-area').innerHTML = '<div style="text-align:center;padding:40px;color:var(--error)">Failed to load messages.</div>';
+  }
+}
+
+async function deleteConversation(id) {
+  if (!confirm('Delete this conversation?')) return;
+  try {
+    await api('DELETE', API.conversations + '/' + id);
+    conversations = conversations.filter(function(c) { return c.id !== id; });
+    if (currentConvId === id) {
+      currentConvId = null;
+      document.getElementById('chat-title').textContent = 'Research Chat';
+      document.getElementById('messages-area').innerHTML = '';
+      document.getElementById('msg-input').disabled = true;
+      document.getElementById('send-btn').disabled = true;
+      document.getElementById('log-list').innerHTML = '';
+      if (logSource) { logSource.close(); logSource = null; }
+    }
+    renderConversations();
+  } catch(e) {
+    console.error('Failed to delete:', e);
+  }
+}
+
+// ── Message rendering ──
+function renderMessages(messages) {
+  var area = document.getElementById('messages-area');
+  area.innerHTML = '';
+  messages.forEach(function(m) {
+    area.appendChild(renderMessage(m));
+  });
+  scrollBottom();
+}
+
+function renderMessage(m) {
+  var div = document.createElement('div');
+  div.className = 'msg ' + (m.role || 'assistant');
+
+  var meta = {};
+  if (typeof m.metadata === 'string') { try { meta = JSON.parse(m.metadata); } catch(e) {} }
+  else if (m.metadata && typeof m.metadata === 'object') { meta = m.metadata; }
+
+  var avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = m.role === 'user' ? 'U' : 'AI';
+
+  var bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+
+  var contentDiv = document.createElement('div');
+
+  if (m.role === 'user') {
+    contentDiv.innerHTML = '<div style="white-space:pre-wrap">' + escapeHtml(m.content) + '</div>';
+  } else {
+    var type = meta.type || 'chat';
+    if (type === 'query_no_results' || type === 'query_no_answer') {
+      var icon = type === 'query_no_results' ? '&#128269;' : '&#9888;';
+      var rhtml = '<div class="rich-card" style="border-color:rgba(245,158,11,0.3)">' +
+        '<div class="rich-card-header" style="background:var(--warning-dim);border-color:rgba(245,158,11,0.2)">' +
+        '<span class="badge badge-warning">' + (type === 'query_no_results' ? 'No Results' : 'No Answer') + '</span></div>' +
+        '<div class="rich-card-body"><div style="font-size:0.875rem;line-height:1.7;white-space:pre-wrap">' + escapeHtml(m.content) + '</div></div></div>';
+      contentDiv.innerHTML = rhtml;
+    } else if (type === 'search' && meta.paper_ids && meta.paper_ids.length > 0) {
+      var txt = (m.content || '').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+      contentDiv.innerHTML = '<div style="font-size:0.875rem;line-height:1.7;margin-bottom:12px">' + txt + '</div>';
+      var selectBtn = document.createElement('button');
+      selectBtn.className = 'chip-btn primary';
+      selectBtn.textContent = 'Select a paper';
+      selectBtn.style.marginTop = '8px';
+      selectBtn.onclick = function() {
+        var papers = meta.papers || meta.paper_ids.map(function(pid, i) { return {paper_id: pid, title: pid}; });
+        showPaperModal(papers, currentConvId);
+      };
+      contentDiv.appendChild(selectBtn);
+    } else if (type === 'info' && meta.data && meta.data.title) {
+      var d = meta.data;
+      var html = '<div class="rich-card">';
+      html += '<div class="rich-card-header"><span class="badge badge-primary">Info</span>' + escapeHtml(d.title || 'Untitled') + '</div>';
+      html += '<div class="rich-card-body"><div style="font-size:0.8125rem;line-height:1.7">';
+      if (d.authors) html += '<p><strong>Authors:</strong> ' + escapeHtml(d.authors.join(', ')) + '</p>';
+      if (d.published) html += '<p><strong>Published:</strong> ' + escapeHtml(d.published) + '</p>';
+      if (d.pdf_url) html += '<p><strong>PDF:</strong> <a href="' + escapeHtml(d.pdf_url) + '" target="_blank" style="color:var(--secondary)">' + escapeHtml(d.pdf_url) + '</a></p>';
+      html += '<p><strong>Indexed:</strong> ' + (d.indexed ? '<span class="badge badge-success">Yes</span>' : '<span class="badge badge-muted">No</span>') + '</p>';
+      if (d.summary) {
+        html += '<details style="margin-top:8px;border:1px solid var(--border);border-radius:6px;padding:8px 10px">' +
+          '<summary style="cursor:pointer;font-weight:500;font-size:0.8125rem">Abstract</summary>' +
+          '<p style="margin-top:6px;font-size:0.8125rem;line-height:1.6;color:var(--text-secondary)">' + escapeHtml(truncate(d.summary, 1000)) + '</p>' +
+        '</details>';
+      }
+      html += '</div></div></div>';
+      contentDiv.innerHTML = html;
+    } else if (type === 'query' && meta.answer) {
+      var rhtml = '<div class="rich-card" style="border-color:rgba(99,102,241,0.3)"><div class="rich-card-header" style="background:var(--primary-dim);border-color:rgba(99,102,241,0.2)">' +
+        '<span class="badge badge-primary">AI</span> Answer</div><div class="rich-card-body">' +
+        '<div style="font-size:0.875rem;line-height:1.7;white-space:pre-wrap">' + escapeHtml(meta.answer) + '</div></div></div>';
+      if (meta.results && meta.results.length > 0) {
+        var sourcesId = 'sources-' + Math.random().toString(36).slice(2, 8);
+        rhtml += '<div class="rich-card" style="margin-top:8px">' +
+          '<div class="rich-card-header" style="cursor:pointer;user-select:none" onclick="toggleSources(\'' + sourcesId + '\')">' +
+          '<span id="' + sourcesId + '-icon" style="display:inline-block;width:14px;text-align:center;color:var(--text-muted);font-size:0.7rem;margin-right:4px">&#9654;</span>' +
+          '<span class="badge badge-muted">' + meta.results.length + '</span> Sources' +
+          '</div>' +
+          '<div id="' + sourcesId + '" class="rich-card-body" style="display:none">';
+        meta.results.forEach(function(r, i) {
+          var payload = r.payload || r;
+          var text = payload.text || payload.content || JSON.stringify(payload);
+          var score = r.score != null ? r.score : (r.distance != null ? 1 - r.distance : null);
+          var pct = score != null ? (score * 100).toFixed(1) + '%' : '';
+          rhtml += '<div class="query-result-item"><details' + (i === 0 ? ' open' : '') + '>' +
+            '<summary><span class="badge badge-info">#' + (i + 1) + (pct ? ' ' + pct : '') + '</span> Chunk ' + (payload.chunk_index != null ? '#' + payload.chunk_index : '') + '</summary>' +
+            '<div class="result-text"><pre><code>' + escapeHtml(text) + '</code></pre></div></details></div>';
+        });
+        rhtml += '</div></div>';
+      }
+      contentDiv.innerHTML = rhtml;
+    } else if (type === 'index' && meta.data) {
+      var d = meta.data;
+      var ok = d.status === 'ok';
+      var ihtml = '<div class="rich-card"><div class="rich-card-header">' +
+        '<span class="badge ' + (ok ? 'badge-success' : 'badge-error') + '">' + (ok ? 'Indexed' : 'Failed') + '</span>' +
+        (ok ? 'Paper indexed' : 'Indexing failed') +
+        '</div><div class="rich-card-body"><div style="font-size:0.8125rem;line-height:1.7">';
+      if (ok) {
+        ihtml += '<p><strong>Paper:</strong> ' + escapeHtml(d.paper_id || '') + '</p>';
+        ihtml += '<p><strong>Chunks:</strong> ' + (d.total_chunks != null ? d.total_chunks : 'N/A') + '</p>';
+        if (d.message) ihtml += '<p>' + escapeHtml(d.message) + '</p>';
+      } else {
+        ihtml += '<p>' + escapeHtml(d.error || 'Unknown error') + '</p>';
+      }
+      ihtml += '</div></div></div>';
+      contentDiv.innerHTML = ihtml;
+    } else if (type === 'paper_ready' && meta.title) {
+      var info = meta.info || {};
+      var html = '<div class="rich-card" style="border-color:rgba(34,197,94,0.3)">' +
+        '<div class="rich-card-header" style="background:var(--success-dim);border-color:rgba(34,197,94,0.2)">' +
+        '<span class="badge badge-success">Ready</span> ' + escapeHtml(meta.title) +
+        '</div><div class="rich-card-body">';
+      if (info.authors) html += '<p style="font-size:0.8125rem;color:var(--text-secondary);margin-bottom:8px">' + escapeHtml(info.authors.join(', ')) + '</p>';
+      html += '<p style="font-size:0.875rem;margin-bottom:12px">' + (meta.already_indexed ? 'Paper was already indexed and is ready for Q&A.' : 'Paper is indexed and ready for Q&A.') + ' What would you like to know?</p>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+      var suggestions = meta.suggestions || ['Summarize this paper', 'What is the main contribution?', 'Explain the methodology', 'What are the key results?', 'What are the limitations?'];
+      suggestions.forEach(function(q) {
+        html += '<span class="suggested-q" data-q="' + escapeHtml(q) + '">' + escapeHtml(q) + '</span>';
+      });
+      html += '</div></div></div>';
+      contentDiv.innerHTML = html;
+    } else {
+      var txt = m.content;
+      txt = txt.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      txt = txt.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      txt = txt.replace(/\n/g, '<br>');
+      contentDiv.innerHTML = txt;
+    }
+  }
+
+  bubble.appendChild(contentDiv);
+  if (m.created_at) {
+    var time = document.createElement('div');
+    time.className = 'msg-time';
+    time.textContent = formatTime(m.created_at);
+    bubble.appendChild(time);
+  }
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  return div;
+}
+
+// ── Toggle sources ──
+function toggleSources(id) {
+  var el = document.getElementById(id);
+  var icon = document.getElementById(id + '-icon');
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    icon.innerHTML = '&#9660;';
+  } else {
+    el.style.display = 'none';
+    icon.innerHTML = '&#9654;';
+  }
+}
+
+// ── Suggested questions click handler ──
+document.getElementById('messages-area').addEventListener('click', function(e) {
+  var target = e.target.closest('.suggested-q');
+  if (target) {
+    var q = target.getAttribute('data-q');
+    if (q) askSuggested(q);
+  }
+});
+
+// ── Paper Selection Modal ──
+var _pendingPapers = [];
+
+function showPaperModal(papers, convId) {
+  _pendingPapers = papers;
+  var list = document.getElementById('paper-modal-list');
+  if (papers.length === 0) return;
+  list.innerHTML = papers.map(function(p, idx) {
+    return '<div class="paper-option" data-idx="' + idx + '">' +
+      '<span class="po-id">' + escapeHtml(p.paper_id) + '</span>' +
+      '<span class="po-title" title="' + escapeHtml(p.title || p.paper_id) + '">' + escapeHtml(p.title || p.paper_id) + '</span>' +
+      '<button class="po-select" data-idx="' + idx + '">Select</button>' +
+    '</div>';
+  }).join('');
+  // Attach click handlers
+  list.querySelectorAll('.po-select').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      var idx = parseInt(e.target.getAttribute('data-idx'));
+      var p = _pendingPapers[idx];
+      closePaperModal();
+      selectPaper(p.paper_id, p.title || p.paper_id);
+    });
+  });
+  list.querySelectorAll('.paper-option').forEach(function(row) {
+    row.addEventListener('click', function(e) {
+      if (e.target.classList.contains('po-select')) return;
+      var idx = parseInt(row.getAttribute('data-idx'));
+      var p = _pendingPapers[idx];
+      closePaperModal();
+      selectPaper(p.paper_id, p.title || p.paper_id);
+    });
+  });
+  document.getElementById('paper-modal-overlay').style.display = 'flex';
+}
+
+function closePaperModal() {
+  document.getElementById('paper-modal-overlay').style.display = 'none';
+}
+
+async function selectPaper(paperId, title) {
+  if (!currentConvId) {
+    await newConversation();
+  }
+  var area = document.getElementById('messages-area');
+
+  var typingDiv = document.createElement('div');
+  typingDiv.className = 'msg assistant';
+  typingDiv.innerHTML = '<div class="msg-avatar">AI</div><div class="msg-bubble"><div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
+  area.appendChild(typingDiv);
+  scrollBottom();
+
+  try {
+    var data = await api('POST', '/api/conversations/' + currentConvId + '/select-paper', { paper_id: paperId, title: title });
+    area.removeChild(typingDiv);
+    var paperTitle = data.title || title || paperId;
+    var readyMsg = {
+      role: 'assistant',
+      content: '',
+      metadata: JSON.stringify({
+        type: 'paper_ready',
+        paper_id: paperId,
+        title: paperTitle,
+        info: data.info || {},
+        total_chunks: data.total_chunks,
+        already_indexed: data.already_indexed || false,
+        suggestions: [
+          'Summarize this paper',
+          'What is the main contribution?',
+          'Explain the methodology',
+          'What are the key results?',
+          'What are the limitations?'
+        ]
+      })
+    };
+    area.appendChild(renderMessage(readyMsg));
+    updateActivePaperBadge(paperTitle);
+    scrollBottom();
+  } catch(e) {
+    area.removeChild(typingDiv);
+    var errDiv = document.createElement('div');
+    errDiv.className = 'msg assistant';
+    errDiv.innerHTML = '<div class="msg-avatar">AI</div><div class="msg-bubble"><div class="rich-card"><div class="rich-card-header"><span class="badge badge-error">Error</span></div><div class="rich-card-body" style="font-size:0.8125rem;color:var(--error)">' + escapeHtml(e.message) + '</div></div></div>';
+    area.appendChild(errDiv);
+    scrollBottom();
+  }
+}
+
+function updateActivePaperBadge(title) {
+  var badge = document.getElementById('active-paper-badge');
+  badge.style.display = 'inline-flex';
+  badge.className = 'active-paper-badge';
+  badge.innerHTML = '<span>&#128196;</span> ' + escapeHtml(title);
+}
+
+function askSuggested(question) {
+  document.getElementById('msg-input').value = question;
+  sendMessage();
+}
+
+async function loadActivePaper() {
+  if (!currentConvId) return;
+  try {
+    var data = await api('GET', '/api/conversations/' + currentConvId + '/active-paper');
+    if (data.active_paper) {
+      updateActivePaperBadge(data.active_paper.title || data.active_paper.paper_id);
+    }
+  } catch(e) {}
+}
+
+// ── Quick actions ──
+async function quickAction(type, paperId) {
+  if (!currentConvId) {
+    await newConversation();
+  }
+  var text = type === 'info' ? '/info ' + paperId : '/index ' + paperId;
+  document.getElementById('msg-input').value = text;
+  await sendMessage();
+}
+
+// ── Send message ──
+async function sendMessage() {
+  var input = document.getElementById('msg-input');
+  var text = input.value.trim();
+  if (!text || loading || !currentConvId) return;
+
+  loading = true;
+  input.disabled = true;
+  document.getElementById('send-btn').disabled = true;
+  document.getElementById('slash-hint').classList.remove('show');
+
+  var area = document.getElementById('messages-area');
+  var userMsgDiv = document.createElement('div');
+  userMsgDiv.className = 'msg user';
+  userMsgDiv.innerHTML = '<div class="msg-avatar">U</div><div class="msg-bubble" style="background:var(--primary-dim);border:1px solid rgba(99,102,241,0.2);border-radius:16px 16px 4px 16px;padding:10px 16px;font-size:0.875rem;line-height:1.6">' + escapeHtml(text) + '</div>';
+  area.appendChild(userMsgDiv);
+  input.value = '';
+  scrollBottom();
+
+  var typingDiv = document.createElement('div');
+  typingDiv.className = 'msg assistant';
+  typingDiv.innerHTML = '<div class="msg-avatar">AI</div><div class="msg-bubble"><div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
+  area.appendChild(typingDiv);
+  scrollBottom();
+
+  try {
+    var data = await api('POST', API.messages(currentConvId), { content: text });
+    area.removeChild(typingDiv);
+    if (data.assistant_message) {
+      area.appendChild(renderMessage(data.assistant_message));
+      // Auto-show paper modal for search results
+      var respMeta = {};
+      if (typeof data.assistant_message.metadata === 'string') { try { respMeta = JSON.parse(data.assistant_message.metadata); } catch(e) {} }
+      else if (data.assistant_message.metadata) { respMeta = data.assistant_message.metadata; }
+      if (respMeta.type === 'search' && respMeta.papers && respMeta.papers.length > 0) {
+        showPaperModal(respMeta.papers, currentConvId);
+      }
+    }
+    var titleEl = document.getElementById('chat-title');
+    if (titleEl.textContent === 'New Chat' || titleEl.textContent === 'Loading...') {
+      var cleanTitle = text.startsWith('/') ? (text.split(' ').slice(1).join(' ') || text) : text;
+      titleEl.textContent = truncate(cleanTitle, 40);
+      try {
+        await api('PATCH', API.conversations + '/' + currentConvId, { title: truncate(cleanTitle, 40) });
+      } catch(e) {}
+    }
+    scrollBottom();
+    loadConversations();
+  } catch(e) {
+    area.removeChild(typingDiv);
+    var errDiv = document.createElement('div');
+    errDiv.className = 'msg assistant';
+    errDiv.innerHTML = '<div class="msg-avatar">AI</div><div class="msg-bubble"><div class="rich-card"><div class="rich-card-header"><span class="badge badge-error">Error</span></div><div class="rich-card-body" style="font-size:0.8125rem;color:var(--error)">' + escapeHtml(e.message) + '</div></div></div>';
+    area.appendChild(errDiv);
+    scrollBottom();
+  } finally {
+    loading = false;
+    input.disabled = false;
+    document.getElementById('send-btn').disabled = false;
+    input.focus();
+  }
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function handleLogout() {
+  localStorage.removeItem('auth_token');
+  authToken = null;
+  document.getElementById('user-info').style.display = 'none';
+  conversations = [];
+  document.getElementById('conv-list').innerHTML = '';
+  document.getElementById('messages-area').innerHTML = '';
+  document.getElementById('chat-title').textContent = 'New Chat';
+  document.getElementById('chat-meta').innerHTML = '';
+  document.getElementById('active-paper-badge').style.display = 'none';
+  document.getElementById('msg-input').disabled = true;
+  document.getElementById('send-btn').disabled = true;
+  currentConvId = null;
+  if (logSource) { logSource.close(); logSource = null; }
+  document.getElementById('auth-overlay').style.display = 'flex';
+}
+
+function showUserInfo(email) {
+  document.getElementById('user-email').textContent = email;
+  document.getElementById('user-info').style.display = 'block';
+}
+
+// ── Init ──
+async function init() {
+  // Check auth
+  if (authToken) {
+    try {
+      var res = await fetch('/api/auth/me', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token: authToken})
+      });
+      var data = await res.json();
+      if (data.authenticated) {
+        document.getElementById('auth-overlay').style.display = 'none';
+        enableChat();
+        showUserInfo(data.user.email);
+        await loadConversations();
+        if (conversations.length > 0) {
+          selectConversation(conversations[0].id);
+        } else {
+          await newConversation();
+        }
+        return;
+      }
+    } catch(e) {}
+    localStorage.removeItem('auth_token');
+    authToken = null;
+  }
+  // Show auth modal
+  document.getElementById('auth-overlay').style.display = 'flex';
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -8,10 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-REDIS_URL = os.getenv(
-    "REDIS_URL",
-    "redis://default:QeH1b3zT3ZEpEbv11YdN0ac6mqozwpzq@redis-18243.c90.us-east-1-3.ec2.cloud.redislabs.com:18243",
-)
+REDIS_URL = os.getenv("REDIS_URL")
+if not REDIS_URL:
+    raise RuntimeError("REDIS_URL environment variable is required")
 
 async def main():
     server_params = StdioServerParameters(

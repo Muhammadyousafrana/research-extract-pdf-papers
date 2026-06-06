@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 from contextlib import AsyncExitStack
 from typing import List
@@ -9,10 +10,13 @@ import fitz
 import httpx
 import pymupdf4llm
 from dotenv import load_dotenv
-from litellm import embedding
+from litellm import embedding, completion
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.server.fastmcp import FastMCP
+
+logger = logging.getLogger("research")
+logging.basicConfig(level=logging.INFO, stream=__import__("sys").stderr)
 
 load_dotenv()
 
@@ -22,6 +26,9 @@ REDIS_PREFIX = "doc:"
 # Embedding config
 EMBEDDING_MODEL = "gemini/gemini-embedding-001"
 EMBEDDING_DIMS = 3072
+
+# LLM config for answer generation
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini/gemma-4-31b-it")
 
 # Redis MCP server config — reads URL from env for security
 REDIS_URL = os.getenv("REDIS_URL")
@@ -96,6 +103,36 @@ async def _get_redis_session(exit_stack: AsyncExitStack) -> ClientSession:
     return session
 
 
+def _generate_answer(question: str, chunks: list) -> str:
+    """Generate an LLM answer grounded on the retrieved chunks."""
+    context_parts = []
+    for i, chunk in enumerate(chunks, 1):
+        payload = chunk.get("payload") or chunk
+        text = payload.get("text", "")
+        pid = payload.get("paper_id", "unknown")
+        cidx = payload.get("chunk_index", i - 1)
+        context_parts.append(f"[Source: paper {pid}, chunk #{cidx}]\n{text}")
+
+    context = "\n\n".join(context_parts)
+
+    response = completion(
+        model=LLM_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a research assistant. Answer the user's question concisely based on the provided paper excerpts. Cite sources in brackets like [paper ID, chunk #N]. If the context lacks enough information, say so rather than guessing.",
+            },
+            {
+                "role": "user",
+                "content": f"CONTEXT:\n{context}\n\nQUESTION: {question}",
+            },
+        ],
+        temperature=0.3,
+        max_tokens=1024,
+    )
+    return response.choices[0].message.content
+
+
 # ─────────────────────────────────────────────
 # MCP TOOLS
 # ─────────────────────────────────────────────
@@ -111,7 +148,7 @@ def search_papers(topic: str, max_results: int = 5) -> List[str]:
         max_results: Maximum number of results to retrieve (default: 5)
 
     Returns:
-        List of paper IDs found in the search
+        List of JSON strings, each containing paper_id and title
     """
     client = arxiv.Client()
     search = arxiv.Search(
@@ -130,10 +167,10 @@ def search_papers(topic: str, max_results: int = 5) -> List[str]:
     except (FileNotFoundError, json.JSONDecodeError):
         papers_info = {}
 
-    paper_ids = []
+    results = []
     for paper in papers:
-        paper_ids.append(paper.get_short_id())
-        papers_info[paper.get_short_id()] = {
+        pid = paper.get_short_id()
+        papers_info[pid] = {
             "title": paper.title,
             "authors": [author.name for author in paper.authors],
             "summary": paper.summary,
@@ -141,12 +178,13 @@ def search_papers(topic: str, max_results: int = 5) -> List[str]:
             "published": str(paper.published.date()),
             "indexed": False,
         }
+        results.append(json.dumps({"paper_id": pid, "title": paper.title}))
 
     with open(file_path, "w") as json_file:
         json.dump(papers_info, json_file, indent=2)
 
-    print(f"Results saved in: {file_path}")
-    return paper_ids
+    logger.info("Results saved in: %s", file_path)
+    return results
 
 
 @mcp.tool()
@@ -171,7 +209,7 @@ def extract_info(paper_id: str) -> str:
                         if paper_id in papers_info:
                             return json.dumps(papers_info[paper_id], indent=2)
                 except (FileNotFoundError, json.JSONDecodeError) as e:
-                    print(f"Error reading {file_path}: {str(e)}")
+                    logger.warning("Error reading %s: %s", file_path, e)
                     continue
 
     return f"There's no saved information related to paper {paper_id}."
@@ -236,7 +274,7 @@ async def index_paper(paper_id: str) -> str:
                 )
             except Exception as e:
                 # Often throws if it already exists, which is fine
-                print(f"Vector index creation note: {e}")
+                logger.info("Vector index creation note: %s", e)
 
             # Store paper metadata
             meta_to_store = paper_meta or {
@@ -348,16 +386,169 @@ async def query_paper(question: str, paper_id: str = "") -> str:
                         except (json.JSONDecodeError, TypeError):
                             results.append({"raw": item.text})
 
+        # ── Step 3: Generate LLM answer from chunks ────────────────────
+        answer = _generate_answer(question, results) if results else ""
+
         return json.dumps(
             {
                 "status": "ok",
                 "question": question,
                 "paper_id": paper_id or "all",
+                "answer": answer,
                 "results": results,
             },
             ensure_ascii=False,
         )
 
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def admin_list_papers() -> str:
+    """List all indexed paper IDs stored in Redis.
+
+    Returns:
+        JSON array of paper IDs that have been indexed.
+    """
+    try:
+        async with AsyncExitStack() as stack:
+            redis_session = await _get_redis_session(stack)
+            result = await redis_session.call_tool("scan_keys", {"pattern": "doc:paper:*:chunk:0"})
+            paper_ids = set()
+            if result and result.content:
+                for item in result.content:
+                    if hasattr(item, "text"):
+                        try:
+                            data = json.loads(item.text)
+                            if isinstance(data, dict):
+                                keys = data.get("keys", data.get("result", []))
+                                if isinstance(keys, list):
+                                    for k in keys:
+                                        parts = k.split(":")
+                                        if len(parts) >= 3:
+                                            paper_ids.add(parts[2])
+                        except (json.JSONDecodeError, TypeError):
+                            raw = item.text.strip()
+                            for possible_key in raw.replace("[", "").replace("]", "").replace('"', "").split(","):
+                                pk = possible_key.strip()
+                                if pk and ":" in pk:
+                                    parts = pk.split(":")
+                                    if len(parts) >= 3:
+                                        paper_ids.add(parts[2])
+            return json.dumps(sorted(paper_ids))
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+async def admin_delete_paper(paper_id: str) -> str:
+    """Delete all indexed chunks and metadata for a paper from Redis.
+
+    Args:
+        paper_id: arXiv paper ID to remove
+
+    Returns:
+        JSON with status and count of deleted keys
+    """
+    try:
+        async with AsyncExitStack() as stack:
+            redis_session = await _get_redis_session(stack)
+            result = await redis_session.call_tool("scan_keys", {"pattern": f"doc:paper:{paper_id}:*"})
+            deleted = 0
+            if result and result.content:
+                for item in result.content:
+                    if hasattr(item, "text"):
+                        try:
+                            data = json.loads(item.text)
+                            keys = []
+                            if isinstance(data, dict):
+                                keys = data.get("keys", data.get("result", []))
+                            elif isinstance(data, list):
+                                keys = data
+                            if isinstance(keys, list):
+                                for k in keys:
+                                    await redis_session.call_tool("del", {"key": k})
+                                    deleted += 1
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+            await redis_session.call_tool("del", {"key": f"paper:{paper_id}"})
+            return json.dumps({"status": "ok", "paper_id": paper_id, "deleted_keys": deleted})
+    except Exception as e:
+        return json.dumps({"status": "error", "error": str(e)})
+
+
+@mcp.tool()
+async def admin_redis_stats() -> str:
+    """Get Redis stats: total indexed papers and chunks.
+
+    Returns:
+        JSON with paper_count and chunk_count
+    """
+    try:
+        async with AsyncExitStack() as stack:
+            redis_session = await _get_redis_session(stack)
+            result = await redis_session.call_tool("scan_keys", {"pattern": "doc:paper:*:chunk:0"})
+            papers = set()
+            if result and result.content:
+                for item in result.content:
+                    if hasattr(item, "text"):
+                        try:
+                            data = json.loads(item.text)
+                            keys = data.get("keys", data.get("result", [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                            if isinstance(keys, list):
+                                for k in keys:
+                                    parts = k.split(":")
+                                    if len(parts) >= 3:
+                                        papers.add(parts[2])
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+            result2 = await redis_session.call_tool("scan_keys", {"pattern": "doc:paper:*:chunk:*"})
+            chunks = 0
+            if result2 and result2.content:
+                for item in result2.content:
+                    if hasattr(item, "text"):
+                        try:
+                            data = json.loads(item.text)
+                            keys = data.get("keys", data.get("result", [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                            if isinstance(keys, list):
+                                chunks += len(keys)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+            return json.dumps({"paper_count": len(papers), "chunk_count": chunks})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+@mcp.tool()
+async def admin_redis_clear() -> str:
+    """Delete ALL indexed paper chunks and metadata from Redis.
+
+    Returns:
+        JSON with status and count of deleted keys.
+    """
+    try:
+        async with AsyncExitStack() as stack:
+            redis_session = await _get_redis_session(stack)
+            patterns = ["doc:paper:*", "paper:*"]
+            all_keys: list[str] = []
+            for pattern in patterns:
+                result = await redis_session.call_tool("scan_keys", {"pattern": pattern})
+                if result and result.content:
+                    for item in result.content:
+                        if hasattr(item, "text"):
+                            try:
+                                data = json.loads(item.text)
+                                keys = data.get("keys", data.get("result", [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                                if isinstance(keys, list):
+                                    all_keys.extend(keys)
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+            deleted = 0
+            for key in all_keys:
+                await redis_session.call_tool("del", {"key": key})
+                deleted += 1
+            return json.dumps({"status": "ok", "deleted_keys": deleted})
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
 

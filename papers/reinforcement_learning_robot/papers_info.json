@@ -1,0 +1,28 @@
+{
+  "1711.10137v2": {
+    "title": "One-Shot Reinforcement Learning for Robot Navigation with Interactive Replay",
+    "authors": [
+      "Jake Bruce",
+      "Niko Suenderhauf",
+      "Piotr Mirowski",
+      "Raia Hadsell",
+      "Michael Milford"
+    ],
+    "summary": "Recently, model-free reinforcement learning algorithms have been shown to solve challenging problems by learning from extensive interaction with the environment. A significant issue with transferring this success to the robotics domain is that interaction with the real world is costly, but training on limited experience is prone to overfitting. We present a method for learning to navigate, to a fixed goal and in a known environment, on a mobile robot. The robot leverages an interactive world model built from a single traversal of the environment, a pre-trained visual feature encoder, and stochastic environmental augmentation, to demonstrate successful zero-shot transfer under real-world environmental variations without fine-tuning.",
+    "pdf_url": "https://arxiv.org/pdf/1711.10137v2",
+    "published": "2017-11-28",
+    "indexed": false
+  },
+  "2602.12375v1": {
+    "title": "Value Bonuses using Ensemble Errors for Exploration in Reinforcement Learning",
+    "authors": [
+      "Abdul Wahab",
+      "Raksha Kumaraswamy",
+      "Martha White"
+    ],
+    "summary": "Optimistic value estimates provide one mechanism for directed exploration in reinforcement learning (RL). The agent acts greedily with respect to an estimate of the value plus what can be seen as a value bonus. The value bonus can be learned by estimating a value function on reward bonuses, propagating local uncertainties around rewards. However, this approach only increases the value bonus for an action retroactively, after seeing a higher reward bonus from that state and action. Such an approach does not encourage the agent to visit a state and action for the first time. In this work, we introduce an algorithm for exploration called Value Bonuses with Ensemble errors (VBE), that maintains an ensemble of random action-value functions (RQFs). VBE uses the errors in the estimation of these RQFs to design value bonuses that provide first-visit optimism and deep exploration. The key idea is to design the rewards for these RQFs in such a way that the value bonus can decrease to zero. We show that VBE outperforms Bootstrap DQN and two reward bonus approaches (RND and ACB) on several classic environments used to test exploration and provide demonstrative experiments that it can scale easily to more complex environments like Atari.",
+    "pdf_url": "https://arxiv.org/pdf/2602.12375v1",
+    "published": "2026-02-12",
+    "indexed": false
+  }
+}

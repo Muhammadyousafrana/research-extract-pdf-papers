@@ -63,6 +63,13 @@ os.remove('.coverage') if os.path.exists('.coverage') else None; \
 [os.remove(os.path.join(r,f)) for r,_,fs in os.walk('.') for f in fs if f.endswith('.pyc')]; \
 print('Done.')"
 
+## web: Run the web UI (FastAPI bridge + static frontend)
+web:
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  WEB UI — http://127.0.0.1:8080"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	$(PYTHON) web_app.py
+
 ## help: Show available targets
 help:
 	@echo "Available targets:"

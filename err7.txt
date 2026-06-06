@@ -1,0 +1,22 @@
+INFO:     Started server process [3932]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:50060 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63790 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63790 - "GET /api/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63790 - "POST /api/conversations HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63790 - "GET /api/conversations/3f110b16-0295-4a42-808b-2b473244b6da/messages HTTP/1.1" 200 OK
+INFO:mcp.server.lowlevel.server:Processing request of type CallToolRequest
+[92m00:59:22 - LiteLLM:INFO[0m: utils.py:1656 - Wrapper: Completed Call, calling success_handler
+INFO:LiteLLM:Wrapper: Completed Call, calling success_handler
+[92m00:59:35 - LiteLLM:INFO[0m: utils.py:3932 - 
+LiteLLM completion() model= gemma-4-31b-it; provider = gemini
+INFO:LiteLLM:
+LiteLLM completion() model= gemma-4-31b-it; provider = gemini
+[92m00:59:43 - LiteLLM:INFO[0m: utils.py:1656 - Wrapper: Completed Call, calling success_handler
+INFO:LiteLLM:Wrapper: Completed Call, calling success_handler
+INFO:mcp.server.lowlevel.server:Processing request of type ListToolsRequest
+INFO:     127.0.0.1:54231 - "POST /api/conversations/3f110b16-0295-4a42-808b-2b473244b6da/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54231 - "PATCH /api/conversations/3f110b16-0295-4a42-808b-2b473244b6da HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54231 - "GET /api/conversations HTTP/1.1" 200 OK

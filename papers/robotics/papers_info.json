@@ -1,0 +1,71 @@
+{
+  "2302.14334v2": {
+    "title": "Design of an Adaptive Lightweight LiDAR to Decouple Robot-Camera Geometry",
+    "authors": [
+      "Yuyang Chen",
+      "Dingkang Wang",
+      "Lenworth Thomas",
+      "Karthik Dantu",
+      "Sanjeev J. Koppal"
+    ],
+    "summary": "A fundamental challenge in robot perception is the coupling of the sensor pose and robot pose. This has led to research in active vision where robot pose is changed to reorient the sensor to areas of interest for perception. Further, egomotion such as jitter, and external effects such as wind and others affect perception requiring additional effort in software such as image stabilization. This effect is particularly pronounced in micro-air vehicles and micro-robots who typically are lighter and subject to larger jitter but do not have the computational capability to perform stabilization in real-time. We present a novel microelectromechanical (MEMS) mirror LiDAR system to change the field of view of the LiDAR independent of the robot motion. Our design has the potential for use on small, low-power systems where the expensive components of the LiDAR can be placed external to the small robot. We show the utility of our approach in simulation and on prototype hardware mounted on a UAV. We believe that this LiDAR and its compact movable scanning design provide mechanisms to decouple robot and sensor geometry allowing us to simplify robot perception. We also demonstrate examples of motion compensation using IMU and external odometry feedback in hardware.",
+    "pdf_url": "https://arxiv.org/pdf/2302.14334v2",
+    "published": "2023-02-28",
+    "indexed": false
+  },
+  "1904.09266v3": {
+    "title": "Secure and secret cooperation in robotic swarms",
+    "authors": [
+      "Eduardo Castell\u00f3 Ferrer",
+      "Thomas Hardjono",
+      "Alex 'Sandy' Pentland",
+      "Marco Dorigo"
+    ],
+    "summary": "The importance of swarm robotics systems in both academic research and real-world applications is steadily increasing. However, to reach widespread adoption, new models that ensure the secure cooperation of large groups of robots need to be developed. This work introduces a novel method to encapsulate cooperative robotic missions in an authenticated data structure known as Merkle tree. With this method, operators can provide the \"blueprint\" of the swarm's mission without disclosing its raw data. In other words, data verification can be separated from data itself. We propose a system where robots in a swarm, to cooperate towards mission completion, have to \"prove\" their integrity to their peers by exchanging cryptographic proofs. We show the implications of this approach for two different swarm robotics missions: foraging and maze formation. In both missions, swarm robots were able to cooperate and carry out sequential operations without having explicit knowledge about the mission's high-level objectives. The results presented in this work demonstrate the feasibility of using Merkle trees as a cooperation mechanism for swarm robotics systems in both simulation and real-robot experiments, which has implications for future decentralized robotics applications where security plays a crucial role such as environmental monitoring, infrastructure surveillance, and disaster management.",
+    "pdf_url": "https://arxiv.org/pdf/1904.09266v3",
+    "published": "2019-04-19",
+    "indexed": true
+  },
+  "2502.04012v1": {
+    "title": "Malleable Robots",
+    "authors": [
+      "Angus B. Clark",
+      "Xinran Wang",
+      "Alex Ranne",
+      "Nicolas Rojas"
+    ],
+    "summary": "This chapter is about the fundamentals of fabrication, control, and human-robot interaction of a new type of collaborative robotic manipulators, called malleable robots, which are based on adjustable architectures of varying stiffness for achieving high dexterity with lower mobility arms. Collaborative robots, or cobots, commonly integrate six or more degrees of freedom (DOF) in a serial arm in order to allow positioning in constrained spaces and adaptability across tasks. Increasing the dexterity of robotic arms has been indeed traditionally accomplished by increasing the number of degrees of freedom of the system; however, once a robotic task has been established (e.g., a pick-and-place operation), the motion of the end-effector can be normally achieved using less than 6-DOF (i.e., lower mobility). The aim of malleable robots is to close the technological gap that separates current cobots from achieving flexible, accessible manufacturing automation with a reduced number of actuators.",
+    "pdf_url": "https://arxiv.org/pdf/2502.04012v1",
+    "published": "2025-02-06",
+    "indexed": false
+  },
+  "2112.01942v3": {
+    "title": "A Survey of Robot Manipulation in Contact",
+    "authors": [
+      "Markku Suomalainen",
+      "Yiannis Karayiannidis",
+      "Ville Kyrki"
+    ],
+    "summary": "In this survey, we present the current status on robots performing manipulation tasks that require varying contact with the environment, such that the robot must either implicitly or explicitly control the contact force with the environment to complete the task. Robots can perform more and more manipulation tasks that are still done by humans, and there is a growing number of publications on the topics of 1) performing tasks that always require contact and 2) mitigating uncertainty by leveraging the environment in tasks that, under perfect information, could be performed without contact. The recent trends have seen robots perform tasks earlier left for humans, such as massage, and in the classical tasks, such as peg-in-hole, there is a more efficient generalization to other similar tasks, better error tolerance, and faster planning or learning of the tasks. Thus, in this survey we cover the current stage of robots performing such tasks, starting from surveying all the different in-contact tasks robots can perform, observing how these tasks are controlled and represented, and finally presenting the learning and planning of the skills required to complete these tasks.",
+    "pdf_url": "https://arxiv.org/pdf/2112.01942v3",
+    "published": "2021-12-03",
+    "indexed": false
+  },
+  "2111.00944v2": {
+    "title": "Piezoelectric Soft Robot Inchworm Motion by Tuning Ground Friction through Robot Shape: Quasi-Static Modeling and Experimental Validation",
+    "authors": [
+      "Zhiwu Zheng",
+      "Prakhar Kumar",
+      "Yenan Chen",
+      "Hsin Cheng",
+      "Sigurd Wagner",
+      "Minjie Chen",
+      "Naveen Verma",
+      "James C. Sturm"
+    ],
+    "summary": "Electrically-driven soft robots based on piezoelectric actuators may enable compact form factors and maneuverability in complex environments. In most prior work, piezoelectric actuators are used to control a single degree of freedom. In this work, the coordinated activation of five independent piezoelectric actuators, attached to a common metal foil, is used to implement inchworm-inspired crawling motion in a robot that is less than 0.5 mm thick. The motion is based on the control of its friction to the ground through the robot's shape, in which one end of the robot (depending on its shape) is anchored to the ground by static friction, while the rest of its body expands or contracts. A complete analytical model of the robot shape, which includes gravity, is developed to quantify the robot shape, friction, and displacement. After validation of the model by experiments, the robot's five actuators are collectively sequenced for inchworm-like forward and backward motion.",
+    "pdf_url": "https://arxiv.org/pdf/2111.00944v2",
+    "published": "2021-11-01",
+    "indexed": false
+  }
+}

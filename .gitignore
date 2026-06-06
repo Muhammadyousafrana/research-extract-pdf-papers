@@ -90,3 +90,5 @@ Desktop.ini
 
 # Project-specific
 research-extract-pdf-papers.log
+
+supabase_schema.sql

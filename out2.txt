@@ -1,0 +1,1 @@
+INFO:     127.0.0.1:57799 - "GET /api/conversations HTTP/1.1" 500 Internal Server Error

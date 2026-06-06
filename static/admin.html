@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Research Paper Assistant</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1b23;
+    --surface2: #22232b;
+    --border: #2a2b35;
+    --text: #e4e4e7;
+    --text2: #a1a1aa;
+    --accent: #6366f1;
+    --accent-hover: #5558e6;
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --success: #22c55e;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Login */
+  .login-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px;
+    width: 380px;
+  }
+  .login-container h1 {
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+  .login-container p { color: var(--text2); margin-bottom: 24px; font-size: 14px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text2); }
+  .form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border .2s;
+  }
+  .form-group input:focus { border-color: var(--accent); }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 6px 14px; font-size: 13px; }
+  .error { color: var(--danger); font-size: 13px; margin-top: 8px; display: none; }
+  .setup-link { text-align: center; margin-top: 16px; font-size: 13px; }
+  .setup-link a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .setup-link a:hover { text-decoration: underline; }
+
+  /* Dashboard */
+  .dashboard { display: none; width: 100%; max-width: 1200px; padding: 24px; }
+  .dash-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .dash-header h1 { font-size: 24px; }
+  .dash-header .user-info { font-size: 13px; color: var(--text2); }
+  .dash-header .logout-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--text2); cursor: pointer; padding: 6px 14px;
+    border-radius: var(--radius); font-size: 13px;
+  }
+  .dash-header .logout-btn:hover { border-color: var(--text2); }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+  }
+  .stat-card .stat-value { font-size: 28px; font-weight: 600; }
+  .stat-card .stat-label { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+  /* Tables */
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 24px; }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .section-header h2 { font-size: 16px; }
+  .section-header .count { font-size: 13px; color: var(--text2); }
+  .section-body { padding: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 10px 20px; font-size: 12px;
+    font-weight: 500; color: var(--text2); text-transform: uppercase;
+    letter-spacing: .5px; border-bottom: 1px solid var(--border);
+  }
+  td { padding: 12px 20px; font-size: 14px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  td .actions { display: flex; gap: 8px; }
+  .empty { padding: 32px 20px; text-align: center; color: var(--text2); font-size: 14px; }
+  .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .paper-tag {
+    display: inline-block; background: var(--surface2); border-radius: 4px;
+    padding: 2px 8px; font-size: 12px; font-family: monospace; margin: 2px;
+  }
+  .search-input {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; width: 240px;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 20px;
+    font-size: 14px; z-index: 1000;
+    transform: translateY(100px); opacity: 0;
+    transition: all .3s ease;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--success); }
+  .toast.error { border-color: var(--danger); }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-cell { display: flex; align-items: center; gap: 8px; color: var(--text2); font-size: 13px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; }
+  .badge-active { background:rgba(34,197,94,0.15); color:#22c55e; }
+  .badge-inactive { background:rgba(245,158,11,0.15); color:#f59e0b; }
+  .badge-warned { background:rgba(239,68,68,0.15); color:#ef4444; }
+  .badge-expired { background:rgba(100,116,139,0.2); color:#94a3b8; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div class="login-container" id="loginView">
+  <h1>Admin Panel</h1>
+  <p>Sign in to manage conversations and indexed papers.</p>
+  <div class="form-group">
+    <label>Username</label>
+    <input type="text" id="loginUser" placeholder="Enter username" autocomplete="username">
+  </div>
+  <div class="form-group">
+    <label>Password</label>
+    <input type="password" id="loginPass" placeholder="Enter password" autocomplete="current-password">
+  </div>
+  <button class="btn btn-primary" onclick="handleLogin()">Sign In</button>
+  <div class="error" id="loginError"></div>
+  <div id="setupInstructions" style="display:none; margin-top:16px; padding:16px; background:var(--surface2); border-radius:var(--radius); font-size:13px; line-height:1.6; color:var(--text2)">
+    <strong style="color:var(--text)">Admin table not found.</strong>
+    <p style="margin-top:8px">Open the Supabase SQL Editor and run the full <code>supabase_schema.sql</code> to create the admin table:</p>
+    <div id="sqlEditorLink" style="margin-top:8px"></div>
+    <p style="margin-top:8px">After running the SQL, refresh this page.</p>
+  </div>
+</div>
+
+<!-- Setup (removed - admin accounts are pre-configured) -->
+
+<!-- Dashboard -->
+<div class="dashboard" id="dashView">
+  <div class="dash-header">
+    <div>
+      <h1>Admin Panel</h1>
+      <div class="user-info">Signed in as <span id="dashUser"></span></div>
+    </div>
+    <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+  </div>
+
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card"><div class="stat-value" id="statConvs">-</div><div class="stat-label">Conversations</div></div>
+    <div class="stat-card"><div class="stat-value" id="statMsgs">-</div><div class="stat-label">Messages</div></div>
+    <div class="stat-card"><div class="stat-value" id="statLinked">-</div><div class="stat-label">Linked Papers</div></div>
+    <div class="stat-card"><div class="stat-value" id="statRedisPapers">-</div><div class="stat-label">Indexed Papers (Redis)</div></div>
+    <div class="stat-card"><div class="stat-value" id="statRedisChunks">-</div><div class="stat-label">Chunks (Redis)</div></div>
+  </div>
+
+  <div class="section" id="chartSection">
+    <div class="section-header">
+      <h2>Activity (Last 30 Days)</h2>
+    </div>
+    <div class="section-body" style="padding:20px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div><canvas id="chartConvs" height="200"></canvas></div>
+        <div><canvas id="chartMsgs" height="200"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="userSection">
+    <div class="section-header">
+      <h2>Users</h2>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn btn-sm" style="background:var(--accent);color:#fff;border:none;padding:8px 16px;border-radius:var(--radius);cursor:pointer;font-size:13px" onclick="warnInactive()">Send Warnings</button>
+        <button class="btn btn-sm" style="background:var(--danger);color:#fff;border:none;padding:8px 16px;border-radius:var(--radius);cursor:pointer;font-size:13px" onclick="cleanupExpired()">Cleanup Expired</button>
+        <span class="count" id="userCount"></span>
+      </div>
+    </div>
+    <div class="section-body" id="userBody">
+      <div class="loading-cell"><div class="spinner"></div> Loading users...</div>
+    </div>
+  </div>
+
+  <div class="section" id="convSection">
+    <div class="section-header">
+      <h2>Conversations</h2>
+      <div style="display:flex;align-items:center;gap:12px">
+        <input class="search-input" id="convSearch" placeholder="Search conversations..." oninput="filterConversations()">
+        <span class="count" id="convCount"></span>
+      </div>
+    </div>
+    <div class="section-body" id="convBody">
+      <div class="loading-cell"><div class="spinner"></div> Loading conversations...</div>
+    </div>
+  </div>
+
+  <div class="section" style="padding:16px 20px;text-align:center">
+    <button class="btn btn-sm" style="background:var(--danger);color:#fff;border:none;padding:10px 24px;border-radius:var(--radius);cursor:pointer;font-size:14px" onclick="clearRedis()">Clear Redis Database</button>
+    <div style="font-size:12px;color:var(--text2);margin-top:6px">Removes all indexed paper chunks and metadata from Redis</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let token = localStorage.getItem('admin_token') || '';
+let username = '';
+var _convData = [];
+var _chartConvs = null;
+var _chartMsgs = null;
+
+async function api(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined }).catch(e => { throw new Error('Network error: ' + e.message); });
+  if (res.status === 401) {
+    localStorage.removeItem('admin_token');
+    token = '';
+    document.getElementById('dashView').style.display = 'none';
+    document.getElementById('loginView').style.display = 'block';
+    document.getElementById('loginError').textContent = 'Session expired. Please sign in again.';
+    document.getElementById('loginError').style.display = 'block';
+    throw new Error('Unauthorized');
+  }
+  if (res.ok && method === 'DELETE') return { status: 'ok' };
+  let data;
+  try {
+    data = await res.json();
+  } catch (_) {
+    data = {};
+  }
+  if (!res.ok) throw new Error(data.detail || data.error || 'Request failed (' + res.status + ')');
+  return data;
+}
+
+// Auth
+async function handleLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  try {
+    const data = await api('POST', '/api/admin/login', { username: user, password: pass });
+    token = data.token;
+    username = data.username;
+    localStorage.setItem('admin_token', token);
+    showDashboard();
+  } catch (e) {
+    if (e.message && e.message.includes('Failed to fetch')) {
+      err.textContent = 'Cannot reach the server. It may still be starting up (takes ~35s). Please wait and refresh.';
+    } else {
+      err.textContent = e.message;
+    }
+    err.style.display = 'block';
+  }
+}
+
+async function handleSetup() {
+  const user = document.getElementById('setupUser').value.trim();
+  const pass = document.getElementById('setupPass').value;
+  const err = document.getElementById('setupError');
+  err.style.display = 'none';
+  if (user.length < 3) { err.textContent = 'Username must be at least 3 characters'; err.style.display = 'block'; return; }
+  if (pass.length < 6) { err.textContent = 'Password must be at least 6 characters'; err.style.display = 'block'; return; }
+  try {
+    const data = await api('POST', '/api/admin/setup', { username: user, password: pass });
+    token = data.token;
+    username = data.username;
+    localStorage.setItem('admin_token', token);
+    showDashboard();
+  } catch (e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  }
+}
+
+function handleLogout() {
+  localStorage.removeItem('admin_token');
+  token = '';
+  document.getElementById('dashView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'block';
+  document.getElementById('loginPass').value = '';
+}
+
+// Dashboard
+async function showDashboard() {
+  document.getElementById('loginView').style.display = 'none';
+  var sv = document.getElementById('setupView'); if (sv) sv.style.display = 'none';
+  document.getElementById('dashView').style.display = 'block';
+  document.getElementById('dashUser').textContent = username;
+  // Fire all fetches in parallel — each updates its section on completion
+  await Promise.all([
+    loadStats(),
+    loadActivity(),
+    loadUsers(),
+    loadConversations(),
+  ]);
+}
+
+async function loadStats() {
+  try {
+    const s = await api('GET', '/api/admin/stats');
+    document.getElementById('statConvs').textContent = s.conversations;
+    document.getElementById('statMsgs').textContent = s.messages;
+    document.getElementById('statLinked').textContent = s.linked_papers;
+    const redis = s.redis || {};
+    document.getElementById('statRedisPapers').textContent = redis.paper_count ?? '-';
+    document.getElementById('statRedisChunks').textContent = redis.chunk_count ?? '-';
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function loadConversations() {
+  try {
+    const data = await api('GET', '/api/admin/conversations');
+    _convData = data.conversations || [];
+    document.getElementById('convSearch').value = '';
+    renderConversations(_convData);
+  } catch (e) {
+    document.getElementById('convBody').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function renderConversations(convs) {
+  const body = document.getElementById('convBody');
+  const count = document.getElementById('convCount');
+  count.textContent = convs.length + ' total';
+  if (convs.length === 0) {
+    body.innerHTML = '<div class="empty">No conversations found.</div>';
+    return;
+  }
+  let html = `<table><thead><tr>
+    <th>Title</th><th>Messages</th><th>Papers</th><th>User</th><th>Created</th><th>Actions</th>
+  </tr></thead><tbody>`;
+  for (const c of convs) {
+    const created = new Date(c.created_at).toLocaleDateString();
+    const papers = (c.paper_ids || []).map(p => `<span class="paper-tag">${p}</span>`).join('');
+    const uid = c.user_id ? c.user_id.slice(0, 8) + '...' : '<span style="color:var(--text2)">anon</span>';
+    html += `<tr>
+      <td><div class="truncate">${esc(c.title)}</div></td>
+      <td>${c.message_count}</td>
+      <td>${papers || '<span style="color:var(--text2)">none</span>'}</td>
+      <td>${uid}</td>
+      <td>${created}</td>
+      <td><div class="actions"><button class="btn btn-danger btn-sm" onclick="deleteConv('${c.id}')">Delete</button></div></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+function filterConversations() {
+  const q = document.getElementById('convSearch').value.toLowerCase();
+  const filtered = _convData.filter(c =>
+    (c.title || '').toLowerCase().includes(q) ||
+    (c.user_id || '').toLowerCase().includes(q)
+  );
+  renderConversations(filtered);
+}
+
+async function clearRedis() {
+  console.log('clearRedis clicked');
+  if (!confirm('Are you sure you want to delete ALL indexed papers and chunks from Redis? This cannot be undone.')) {
+    console.log('clearRedis cancelled');
+    return;
+  }
+  console.log('clearRedis confirmed, sending request...');
+  try {
+    const data = await api('POST', '/api/admin/redis/clear');
+    console.log('clearRedis response:', data);
+    toast('Redis cleared (' + (data.deleted_keys || 0) + ' keys removed)');
+    await loadStats();
+  } catch (e) {
+    console.error('clearRedis error:', e);
+    toast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteConv(id) {
+  if (!confirm('Delete this conversation and all its messages?')) return;
+  try {
+    await api('DELETE', `/api/admin/conversations/${id}`);
+    toast('Conversation deleted');
+    loadStats();
+    loadConversations();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// ── User management ──
+var _userData = [];
+
+async function loadActivity() {
+  try {
+    const data = await api('GET', '/api/admin/activity');
+    const chartOpts = {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Conversations',
+          data: data.conversations,
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99,102,241,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#a1a1aa' } } },
+        scales: { x: { ticks: { color: '#a1a1aa', maxTicksLimit: 7 }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { beginAtZero: true, ticks: { color: '#a1a1aa', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' } } }
+      }
+    };
+    if (_chartConvs) { _chartConvs.destroy(); }
+    _chartConvs = new Chart(document.getElementById('chartConvs'), chartOpts);
+    var msgOpts = JSON.parse(JSON.stringify(chartOpts));
+    msgOpts.data.datasets[0].label = 'Messages';
+    msgOpts.data.datasets[0].data = data.messages;
+    msgOpts.data.datasets[0].borderColor = '#22c55e';
+    msgOpts.data.datasets[0].backgroundColor = 'rgba(34,197,94,0.1)';
+    if (_chartMsgs) { _chartMsgs.destroy(); }
+    _chartMsgs = new Chart(document.getElementById('chartMsgs'), msgOpts);
+  } catch (e) {
+    console.error('Failed to load activity:', e);
+  }
+}
+
+async function loadUsers() {
+  try {
+    const data = await api('GET', '/api/admin/users');
+    _userData = data.users || [];
+    renderUsers(_userData);
+  } catch (e) {
+    document.getElementById('userBody').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function renderUsers(users) {
+  const body = document.getElementById('userBody');
+  const count = document.getElementById('userCount');
+  count.textContent = users.length + ' total';
+  if (users.length === 0) {
+    body.innerHTML = '<div class="empty">No users found.</div>';
+    return;
+  }
+  let html = `<table><thead><tr>
+    <th>Email</th><th>Username</th><th>Status</th><th>Last Active</th><th>Created</th>
+  </tr></thead><tbody>`;
+  for (const u of users) {
+    const created = new Date(u.created_at).toLocaleDateString();
+    const lastActive = u.last_active ? new Date(u.last_active).toLocaleDateString() : 'never';
+    const statusClass = 'badge-' + (u.status || 'active');
+    html += `<tr>
+      <td>${esc(u.email)}</td>
+      <td>${esc(u.username)}</td>
+      <td><span class="badge ${statusClass}">${esc(u.status || 'active')}</span></td>
+      <td>${lastActive}</td>
+      <td>${created}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+async function warnInactive() {
+  if (!confirm('Send warning emails to all users inactive for 14+ days?')) return;
+  try {
+    const data = await api('POST', '/api/admin/users/warn-inactive');
+    toast(`Warnings sent to ${data.warned} users${data.failed ? ' (' + data.failed + ' failed)' : ''}`);
+    loadUsers();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function cleanupExpired() {
+  if (!confirm('Delete accounts of users inactive for 28+ days who were already warned?')) return;
+  try {
+    const data = await api('POST', '/api/admin/users/cleanup-expired');
+    toast(`Deleted ${data.deleted} expired accounts${data.failed ? ' (' + data.failed + ' failed)' : ''}`);
+    loadStats();
+    loadUsers();
+    loadConversations();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function escAttr(s) {
+  return s.replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + (type || 'success') + ' show';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// Auto-login check
+(async function init() {
+  // Check if server is reachable first
+  var errEl = document.getElementById('loginError');
+  if (token) {
+    try {
+      const data = await api('POST', '/api/admin/verify', { token });
+      if (data.valid) {
+        username = data.username;
+        showDashboard();
+        return;
+      }
+    } catch (_) {}
+    localStorage.removeItem('admin_token');
+    token = '';
+  }
+  // Check if server is reachable
+  try {
+    const check = await api('GET', '/api/admin/check-setup');
+    if (!check.ready) {
+      document.getElementById('setupInstructions').style.display = 'block';
+      try {
+        const proj = await api('GET', '/api/admin/supabase-project');
+        if (proj.sql_editor_url) {
+          document.getElementById('sqlEditorLink').innerHTML =
+            '<a href="' + escAttr(proj.sql_editor_url) + '" target="_blank" style="color:var(--accent)">Open Supabase SQL Editor</a>';
+        }
+      } catch (_) {}
+      return;
+    }
+  } catch (e) {
+    if (e.message && e.message.includes('Failed to fetch')) {
+      errEl.textContent = 'Cannot reach the server. It may still be starting up (takes ~35s). Please wait and refresh.';
+      errEl.style.display = 'block';
+    }
+  }
+})();
+
+// Enter key support
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginView').style.display !== 'none') handleLogin();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+{
+  "1905.13402v8": {
+    "title": "Safety Augmented Value Estimation from Demonstrations (SAVED): Safe Deep Model-Based RL for Sparse Cost Robotic Tasks",
+    "authors": [
+      "Brijen Thananjeyan",
+      "Ashwin Balakrishna",
+      "Ugo Rosolia",
+      "Felix Li",
+      "Rowan McAllister",
+      "Joseph E. Gonzalez",
+      "Sergey Levine",
+      "Francesco Borrelli",
+      "Ken Goldberg"
+    ],
+    "summary": "Reinforcement learning (RL) for robotics is challenging due to the difficulty in hand-engineering a dense cost function, which can lead to unintended behavior, and dynamical uncertainty, which makes exploration and constraint satisfaction challenging. We address these issues with a new model-based reinforcement learning algorithm, Safety Augmented Value Estimation from Demonstrations (SAVED), which uses supervision that only identifies task completion and a modest set of suboptimal demonstrations to constrain exploration and learn efficiently while handling complex constraints. We then compare SAVED with 3 state-of-the-art model-based and model-free RL algorithms on 6 standard simulation benchmarks involving navigation and manipulation and a physical knot-tying task on the da Vinci surgical robot. Results suggest that SAVED outperforms prior methods in terms of success rate, constraint satisfaction, and sample efficiency, making it feasible to safely learn a control policy directly on a real robot in less than an hour. For tasks on the robot, baselines succeed less than 5% of the time while SAVED has a success rate of over 75% in the first 50 training iterations. Code and supplementary material is available at https://tinyurl.com/saved-rl.",
+    "pdf_url": "https://arxiv.org/pdf/1905.13402v8",
+    "published": "2019-05-31",
+    "indexed": false
+  },
+  "2302.14334v2": {
+    "title": "Design of an Adaptive Lightweight LiDAR to Decouple Robot-Camera Geometry",
+    "authors": [
+      "Yuyang Chen",
+      "Dingkang Wang",
+      "Lenworth Thomas",
+      "Karthik Dantu",
+      "Sanjeev J. Koppal"
+    ],
+    "summary": "A fundamental challenge in robot perception is the coupling of the sensor pose and robot pose. This has led to research in active vision where robot pose is changed to reorient the sensor to areas of interest for perception. Further, egomotion such as jitter, and external effects such as wind and others affect perception requiring additional effort in software such as image stabilization. This effect is particularly pronounced in micro-air vehicles and micro-robots who typically are lighter and subject to larger jitter but do not have the computational capability to perform stabilization in real-time. We present a novel microelectromechanical (MEMS) mirror LiDAR system to change the field of view of the LiDAR independent of the robot motion. Our design has the potential for use on small, low-power systems where the expensive components of the LiDAR can be placed external to the small robot. We show the utility of our approach in simulation and on prototype hardware mounted on a UAV. We believe that this LiDAR and its compact movable scanning design provide mechanisms to decouple robot and sensor geometry allowing us to simplify robot perception. We also demonstrate examples of motion compensation using IMU and external odometry feedback in hardware.",
+    "pdf_url": "https://arxiv.org/pdf/2302.14334v2",
+    "published": "2023-02-28",
+    "indexed": false
+  },
+  "1904.09266v3": {
+    "title": "Secure and secret cooperation in robotic swarms",
+    "authors": [
+      "Eduardo Castell\u00f3 Ferrer",
+      "Thomas Hardjono",
+      "Alex 'Sandy' Pentland",
+      "Marco Dorigo"
+    ],
+    "summary": "The importance of swarm robotics systems in both academic research and real-world applications is steadily increasing. However, to reach widespread adoption, new models that ensure the secure cooperation of large groups of robots need to be developed. This work introduces a novel method to encapsulate cooperative robotic missions in an authenticated data structure known as Merkle tree. With this method, operators can provide the \"blueprint\" of the swarm's mission without disclosing its raw data. In other words, data verification can be separated from data itself. We propose a system where robots in a swarm, to cooperate towards mission completion, have to \"prove\" their integrity to their peers by exchanging cryptographic proofs. We show the implications of this approach for two different swarm robotics missions: foraging and maze formation. In both missions, swarm robots were able to cooperate and carry out sequential operations without having explicit knowledge about the mission's high-level objectives. The results presented in this work demonstrate the feasibility of using Merkle trees as a cooperation mechanism for swarm robotics systems in both simulation and real-robot experiments, which has implications for future decentralized robotics applications where security plays a crucial role such as environmental monitoring, infrastructure surveillance, and disaster management.",
+    "pdf_url": "https://arxiv.org/pdf/1904.09266v3",
+    "published": "2019-04-19",
+    "indexed": false
+  },
+  "2502.04012v1": {
+    "title": "Malleable Robots",
+    "authors": [
+      "Angus B. Clark",
+      "Xinran Wang",
+      "Alex Ranne",
+      "Nicolas Rojas"
+    ],
+    "summary": "This chapter is about the fundamentals of fabrication, control, and human-robot interaction of a new type of collaborative robotic manipulators, called malleable robots, which are based on adjustable architectures of varying stiffness for achieving high dexterity with lower mobility arms. Collaborative robots, or cobots, commonly integrate six or more degrees of freedom (DOF) in a serial arm in order to allow positioning in constrained spaces and adaptability across tasks. Increasing the dexterity of robotic arms has been indeed traditionally accomplished by increasing the number of degrees of freedom of the system; however, once a robotic task has been established (e.g., a pick-and-place operation), the motion of the end-effector can be normally achieved using less than 6-DOF (i.e., lower mobility). The aim of malleable robots is to close the technological gap that separates current cobots from achieving flexible, accessible manufacturing automation with a reduced number of actuators.",
+    "pdf_url": "https://arxiv.org/pdf/2502.04012v1",
+    "published": "2025-02-06",
+    "indexed": false
+  },
+  "1909.12200v3": {
+    "title": "Scaling data-driven robotics with reward sketching and batch reinforcement learning",
+    "authors": [
+      "Serkan Cabi",
+      "Sergio G\u00f3mez Colmenarejo",
+      "Alexander Novikov",
+      "Ksenia Konyushkova",
+      "Scott Reed",
+      "Rae Jeong",
+      "Konrad Zolna",
+      "Yusuf Aytar",
+      "David Budden",
+      "Mel Vecerik",
+      "Oleg Sushkov",
+      "David Barker",
+      "Jonathan Scholz",
+      "Misha Denil",
+      "Nando de Freitas",
+      "Ziyu Wang"
+    ],
+    "summary": "We present a framework for data-driven robotics that makes use of a large dataset of recorded robot experience and scales to several tasks using learned reward functions. We show how to apply this framework to accomplish three different object manipulation tasks on a real robot platform. Given demonstrations of a task together with task-agnostic recorded experience, we use a special form of human annotation as supervision to learn a reward function, which enables us to deal with real-world tasks where the reward signal cannot be acquired directly. Learned rewards are used in combination with a large dataset of experience from different tasks to learn a robot policy offline using batch RL. We show that using our approach it is possible to train agents to perform a variety of challenging manipulation tasks including stacking rigid objects and handling cloth.",
+    "pdf_url": "https://arxiv.org/pdf/1909.12200v3",
+    "published": "2019-09-26",
+    "indexed": false
+  }
+}
