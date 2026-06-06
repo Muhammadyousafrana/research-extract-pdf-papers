@@ -31,6 +31,7 @@
 - **Embed** chunks using configurable embedding models (Google Gemini, Voyage AI, or OpenAI).
 - **Store** embeddings in Redis for later semantic retrieval.
 - **Retrieve** saved paper metadata by paper ID.
+- **Web Interface** — A modern FastAPI-based web application for chatting with research papers.
 
 ### Primary Use Cases
 
@@ -138,10 +139,11 @@ uv pip install .
 
 # 4. Copy and configure environment variables
 cp .env.example .env          # create .env from the example (see Configuration section)
-# Edit .env and fill in at least one embedding API key
+# Edit .env and fill in all necessary API keys (Gemini, Supabase, Resend)
 
-# 5. Run the MCP server (stdio transport — suitable for MCP clients)
-python research_server.py
+# 5. Run the Web Interface (FastAPI)
+make web
+# The app will be available at http://127.0.0.1:8080
 ```
 
 ### Docker setup
@@ -250,16 +252,19 @@ Configuration is provided via environment variables (loaded automatically with `
 | Variable | Required | Description |
 |---|---|---|
 | `GEMINI_API_KEY` | If using Gemini | API key for Google Gemini embeddings |
-| `VOYAGE_API_KEY` | If using Voyage | API key for Voyage AI embeddings |
-| `OPENAI_API_KEY` | If using OpenAI | API key for OpenAI embeddings |
+| `SUPABASE_URL` | Yes | Your Supabase project URL |
+| `SUPABASE_KEY` | Yes | Your Supabase API key |
+| `RESEND_API_KEY` | Yes | Your Resend API key for verification emails |
+| `BASE_URL` | Yes | Base URL for verification links (e.g., http://127.0.0.1:8080) |
 
 Create a `.env` file in the project root:
 
 ```dotenv
-# .env — fill in whichever embedding provider you use
 GEMINI_API_KEY=your_gemini_key_here
-# VOYAGE_API_KEY=your_voyage_key_here
-# OPENAI_API_KEY=your_openai_key_here
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+RESEND_API_KEY=your_resend_api_key
+BASE_URL=http://127.0.0.1:8080
 ```
 
 ### Embedding model selection
