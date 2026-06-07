@@ -238,9 +238,13 @@ async def lifespan(app: FastAPI):
         args=["research_server.py"],
         env={**os.environ},
     )
-    read, write = await exit_stack.enter_async_context(stdio_client(server_params))
-    session = await exit_stack.enter_async_context(ClientSession(read, write))
-    await session.initialize()
+    try:
+        read, write = await exit_stack.enter_async_context(stdio_client(server_params))
+        session = await exit_stack.enter_async_context(ClientSession(read, write))
+        await session.initialize()
+    except Exception as e:
+        logger.warning("MCP session init failed (will retry on first request): %s", e)
+        session = None
     _verify_tables()
     yield
     try:
