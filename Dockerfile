@@ -10,11 +10,6 @@ WORKDIR ${APP_HOME}
 EXPOSE 8080
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    poppler-utils \
-    tesseract-ocr \
-    libgl1 \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*

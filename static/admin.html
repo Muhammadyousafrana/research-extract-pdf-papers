@@ -236,6 +236,19 @@
     </div>
   </div>
 
+  <div class="section" id="localPaperSection">
+    <div class="section-header">
+      <h2>Local Papers (papers/)</h2>
+      <div style="display:flex;align-items:center;gap:12px">
+        <input class="search-input" id="localPaperSearch" placeholder="Search local papers..." oninput="filterLocalPapers()">
+        <span class="count" id="localPaperCount"></span>
+      </div>
+    </div>
+    <div class="section-body" id="localPaperBody">
+      <div class="loading-cell"><div class="spinner"></div> Loading local papers...</div>
+    </div>
+  </div>
+
   <div class="section" style="padding:16px 20px;text-align:center">
     <button class="btn btn-sm" style="background:var(--danger);color:#fff;border:none;padding:10px 24px;border-radius:var(--radius);cursor:pointer;font-size:14px" onclick="clearRedis()">Clear Redis Database</button>
     <div style="font-size:12px;color:var(--text2);margin-top:6px">Removes all indexed paper chunks and metadata from Redis</div>
@@ -320,9 +333,7 @@ async function handleSetup() {
 function handleLogout() {
   localStorage.removeItem('admin_token');
   token = '';
-  document.getElementById('dashView').style.display = 'none';
-  document.getElementById('loginView').style.display = 'block';
-  document.getElementById('loginPass').value = '';
+  window.location.href = '/';
 }
 
 // Dashboard
@@ -337,6 +348,7 @@ async function showDashboard() {
     loadActivity(),
     loadUsers(),
     loadConversations(),
+    loadLocalPapers(),
   ]);
 }
 
@@ -417,6 +429,65 @@ async function clearRedis() {
   } catch (e) {
     console.error('clearRedis error:', e);
     toast('Failed: ' + e.message, 'error');
+  }
+}
+
+var _localPaperData = [];
+
+async function loadLocalPapers() {
+  try {
+    const data = await api('GET', '/api/admin/local-papers');
+    _localPaperData = data.topics || [];
+    document.getElementById('localPaperSearch').value = '';
+    renderLocalPapers(_localPaperData);
+  } catch (e) {
+    document.getElementById('localPaperBody').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function renderLocalPapers(topics) {
+  const body = document.getElementById('localPaperBody');
+  const count = document.getElementById('localPaperCount');
+  const total = topics.reduce((s, t) => s + t.papers.length, 0);
+  count.textContent = total + ' total';
+  if (topics.length === 0) {
+    body.innerHTML = '<div class="empty">No local papers found.</div>';
+    return;
+  }
+  let html = '';
+  for (const t of topics) {
+    html += `<div style="padding:10px 20px;background:var(--surface2);font-size:12px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">${esc(t.topic)}</div>`;
+    html += `<table><thead><tr><th>Paper ID</th><th>Title</th><th>Indexed</th><th>Actions</th></tr></thead><tbody>`;
+    for (const p of t.papers) {
+      html += `<tr>
+        <td><code>${esc(p.paper_id)}</code></td>
+        <td><div class="truncate" style="max-width:300px">${esc(p.title)}</div></td>
+        <td>${p.indexed ? '<span class="badge badge-active">Yes</span>' : '<span class="badge badge-inactive">No</span>'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteLocalPaper('${escAttr(p.paper_id)}')">Delete</button></td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+  body.innerHTML = html;
+}
+
+function filterLocalPapers() {
+  const q = document.getElementById('localPaperSearch').value.toLowerCase();
+  const filtered = _localPaperData.map(t => ({
+    topic: t.topic,
+    papers: t.papers.filter(p => p.paper_id.toLowerCase().includes(q) || p.title.toLowerCase().includes(q))
+  })).filter(t => t.papers.length > 0);
+  renderLocalPapers(filtered);
+}
+
+async function deleteLocalPaper(pid) {
+  if (!confirm(`Delete paper ${pid} from local storage?`)) return;
+  try {
+    const data = await api('DELETE', `/api/admin/local-papers/${encodeURIComponent(pid)}`);
+    toast('Deleted paper ' + pid + ' from topic ' + data.topic);
+    loadLocalPapers();
+  } catch (e) {
+    toast(e.message, 'error');
   }
 }
 

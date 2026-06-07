@@ -77,7 +77,7 @@
 | Testing | [`pytest`](https://docs.pytest.org/) + [`pytest-cov`](https://pytest-cov.readthedocs.io/) |
 | Containerisation | Docker (python:3.12-slim base — see note below) |
 
-> **⚠️ Note:** `pyproject.toml` declares `requires-python = ">=3.14"` and `.python-version` pins `3.14`, but the `Dockerfile` currently uses `python:3.12-slim`. For a fully consistent container build, update the `FROM` line in `Dockerfile` to `python:3.14-slim` once a stable image is available.
+> **⚠️ Note:** The `Dockerfile` uses `python:3.13-slim` while `.python-version` pins `3.14`. The codebase is compatible with both.
 | Environment | [`python-dotenv`](https://pypi.org/project/python-dotenv/) |
 
 ---
@@ -87,7 +87,6 @@
 ```
 research-extract-pdf-papers/
 ├── research_server.py   # Main MCP server — all tool definitions live here
-├── main.py              # Minimal standalone entrypoint (prints hello message)
 ├── test_server.py       # pytest test suite for research_server.py
 ├── pyproject.toml       # Project metadata and dependency declarations (uv/pip)
 ├── uv.lock              # Locked dependency versions for reproducible installs
@@ -104,15 +103,18 @@ research-extract-pdf-papers/
 
 ### Key file: `research_server.py`
 
-Contains five MCP tools exposed to any connected MCP client:
+Contains MCP tools exposed to any connected MCP client:
 
 | Tool | Purpose |
 |---|---|
 | `search_papers(topic, max_results)` | Search arXiv and save metadata to `papers/<topic>/papers_info.json` |
 | `extract_info(paper_id)` | Return saved metadata JSON for a specific paper ID |
-| `extract_chunks(paper_id, pdf_url)` | Download PDF, convert to Markdown, split into numbered chunks |
-| `embed_chunk(text)` | Generate an embedding vector for a single chunk of text |
-| `mark_paper_indexed(paper_id)` | Set `indexed: true` in local metadata once a paper is fully stored |
+| `index_paper(paper_id)` | Download PDF, chunk text, embed, and store in Redis — all in one step |
+| `query_paper(question, paper_id)` | Answer a question about an indexed paper via vector search + LLM |
+| `admin_list_papers()` | List all indexed paper IDs in Redis |
+| `admin_delete_paper(paper_id)` | Delete all indexed chunks for a paper from Redis |
+| `admin_redis_stats()` | Get indexed paper and chunk counts from Redis |
+| `admin_redis_clear()` | Clear all indexed data from Redis |
 
 ---
 
@@ -230,51 +232,25 @@ extract_info(paper_id="2301.07041")
 # }
 ```
 
-### Example: extract PDF chunks (Step 1 of indexing)
+### Example: index a paper (single-step workflow)
 
 ```python
-extract_chunks(
-    paper_id="2301.07041",
-    pdf_url="https://arxiv.org/pdf/2301.07041"
-)
+index_paper(paper_id="2301.07041")
 # Returns JSON:
 # {
 #   "status": "ok",
 #   "paper_id": "2301.07041",
-#   "total_chunks": 12,
-#   "chunks": [
-#     {"index": 0, "redis_key": "doc:paper:2301.07041:chunk:0", "text": "..."},
-#     ...
-#   ]
+#   "total_chunks": 25,
+#   "stored_chunks": 25,
+#   "message": "Indexed 25/25 chunks into Redis"
 # }
 ```
 
-### Example: embed a chunk (Step 2 of indexing)
+### Example: query an indexed paper
 
 ```python
-embed_chunk(text="Retrieval-augmented generation combines parametric...")
-# Returns JSON:
-# {"status": "ok", "vector": [0.012, -0.034, ..., 0.091]}   # 3072 floats (Gemini)
-```
-
-### Example: mark paper as indexed (Step 3 of indexing)
-
-```python
-mark_paper_indexed(paper_id="2301.07041")
-# Returns: "Paper '2301.07041' marked as indexed."
-```
-
-### Full indexing workflow
-
-```
-1. search_papers(topic)          → get list of paper IDs
-2. extract_info(paper_id)        → get pdf_url from metadata
-3. extract_chunks(paper_id, url) → get text chunks + redis_key for each
-4. For each chunk:
-     embed_chunk(chunk.text)     → get vector
-     RedisMCPServer:hset(...)    → store text fields
-     RedisMCPServer:set_vector_in_hash(...) → store vector
-5. mark_paper_indexed(paper_id)  → flag as done
+query_paper(question="What is the main contribution?", paper_id="2301.07041")
+# Returns JSON with answer, top matching chunks, and relevance scores
 ```
 
 ---
@@ -417,9 +393,9 @@ Tests are grouped by component in `test_server.py`:
 
 ### Python version mismatch
 
-**Symptom:** Syntax errors or import failures on Python < 3.14
+**Symptom:** Syntax errors or import failures
 
-**Fix:** The project requires Python 3.14+. Use `pyenv install 3.14` or switch to the Docker image which uses Python 3.12 (adjust `pyproject.toml` `requires-python` if you need to target 3.12).
+**Fix:** The project requires Python 3.13+. Use `pyenv install 3.14` or the Docker image (Python 3.13).
 
 ### `uv` command not found
 

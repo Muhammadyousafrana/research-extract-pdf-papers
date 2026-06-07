@@ -98,5 +98,3 @@ stdout.txt
 err*.txt
 out*.txt
 *.png
-
-supabase_schema.sql

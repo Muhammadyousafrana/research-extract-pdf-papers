@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
@@ -21,6 +22,9 @@ from supabase import create_client, Client
 import resend
 
 load_dotenv()
+
+logger = logging.getLogger("web_app")
+logging.basicConfig(level=logging.INFO, stream=__import__("sys").stderr)
 
 BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8080")
 
@@ -239,7 +243,10 @@ async def lifespan(app: FastAPI):
     await session.initialize()
     _verify_tables()
     yield
-    await exit_stack.aclose()
+    try:
+        await exit_stack.aclose()
+    except Exception:
+        pass  # ignore shutdown ordering issues with stdio_client cancel scopes
 
 
 app = FastAPI(title="Research Paper Chat", lifespan=lifespan)
@@ -296,9 +303,40 @@ def _ensure_supabase():
         raise HTTPException(status_code=503, detail="Database not set up. Go to Supabase SQL Editor and run supabase_schema.sql")
 
 
-def _ensure_session():
-    if session is None:
+async def _restart_session():
+    """Try to restart a dead MCP session."""
+    global session, exit_stack
+    try:
+        if exit_stack:
+            await exit_stack.aclose()
+    except Exception:
+        pass
+    exit_stack = AsyncExitStack()
+    try:
+        server_params = StdioServerParameters(
+            command=sys.executable,
+            args=["research_server.py"],
+            env={**os.environ},
+        )
+        read, write = await exit_stack.enter_async_context(stdio_client(server_params))
+        session = await exit_stack.enter_async_context(ClientSession(read, write))
+        await session.initialize()
+    except Exception:
+        session = None
+        raise
+
+
+async def _ensure_session():
+    if session is not None:
+        return
+    try:
+        await _restart_session()
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(status_code=503, detail="MCP server not connected")
+
+
 
 
 def _extract_texts(result: Any) -> list[str]:
@@ -316,10 +354,6 @@ def _parse_first(result: Any) -> Any:
     except (json.JSONDecodeError, TypeError):
         return texts[0]
 
-def _parse_texts_as_list(result: Any) -> list[str]:
-    texts = _extract_texts(result)
-
-
 def _parse_paper_results(result: Any) -> list[dict]:
     """Parse search_papers results (each TextContent is a JSON string with paper_id, title)."""
     texts = _extract_texts(result)
@@ -332,23 +366,14 @@ def _parse_paper_results(result: Any) -> list[dict]:
         except (json.JSONDecodeError, TypeError):
             pass
     return papers
-    items = []
-    for t in texts:
-        try:
-            parsed = json.loads(t)
-            if isinstance(parsed, list):
-                items.extend(parsed)
-            else:
-                items.append(parsed)
-        except (json.JSONDecodeError, TypeError):
-            items.append(t)
-    return items
 
 
 _APOLOGY_PATTERNS = ["i am sorry", "i'm sorry", "sorry,", "does not contain", "no information", "no relevant", "cannot answer", "i cannot"]
 
 
-def _is_apology(text: str) -> bool:
+def _is_apology(text: str | None) -> bool:
+    if not text:
+        return False
     lower = text.lower().strip()
     return any(p in lower for p in _APOLOGY_PATTERNS)
 
@@ -362,14 +387,6 @@ _SEARCH_PATTERNS = [
     re.compile(r"(?:i\s+)?want\s+(?:to\s+)?(?:find|search\s+for)\s+(.+)", re.I),
 ]
 
-_INFO_PATTERNS = [
-    re.compile(r"info\s+(?:on|about)\s+(.+)", re.I),
-    re.compile(r"get\s+info\s+(?:for|about)\s+(.+)", re.I),
-    re.compile(r"details\s+(?:for|about)\s+(.+)", re.I),
-    re.compile(r"(?:what|tell me)\s+(?:is|about)\s+(\d+\.\d+|\w+/\d+)(?:\s+paper|\s+article)?$", re.I),
-]
-
-_INDEX_PATTERN = re.compile(r"^index\s+(.+)$", re.I)
 
 _TOPIC_CLEANUP = re.compile(r"\s+(and\s+(summarize|tell|give|show|list)\s.*|please\s*)$", re.I)
 
@@ -388,12 +405,8 @@ def _detect_intent(text: str) -> tuple[str, dict]:
         rest = parts[1].strip() if len(parts) > 1 else ""
         if cmd == "search":
             return "search", {"topic": rest, "max_results": 5}
-        if cmd == "info":
-            return "info", {"paper_id": rest}
         if cmd == "query":
             return "query", {"question": rest}
-        if cmd == "index":
-            return "index", {"paper_id": rest}
         return "query", {"question": trimmed}
 
     for pat in _SEARCH_PATTERNS:
@@ -403,17 +416,6 @@ def _detect_intent(text: str) -> tuple[str, dict]:
             topic = _TOPIC_CLEANUP.sub("", topic).strip()
             if topic:
                 return "search", {"topic": topic, "max_results": 5}
-
-    for pat in _INFO_PATTERNS:
-        m = pat.search(trimmed)
-        if m:
-            paper_id = m.group(1).strip().strip('"').strip("'")
-            if paper_id:
-                return "info", {"paper_id": paper_id}
-
-    m = _INDEX_PATTERN.match(trimmed)
-    if m:
-        return "index", {"paper_id": m.group(1).strip()}
 
     return "query", {"question": trimmed}
 
@@ -560,8 +562,9 @@ async def list_messages(conv_id: str, request: Request):
 
 @app.post("/api/conversations/{conv_id}/messages")
 async def send_message(conv_id: str, body: dict, request: Request):
+    global session
     _ensure_supabase()
-    _ensure_session()
+    await _ensure_session()
     _verify_conv_owner(conv_id, _get_user_from_request(request))
 
     content = body.get("content", "").strip()
@@ -575,7 +578,12 @@ async def send_message(conv_id: str, body: dict, request: Request):
     try:
         if intent == "search":
             _publish_log(conv_id, "search_papers", "running", f"Searching for papers on: {params.get('topic')}")
-            result = await session.call_tool("search_papers", params)
+            try:
+                result = await session.call_tool("search_papers", params)
+            except Exception as search_err:
+                _publish_log(conv_id, "search_papers", "error", str(search_err))
+                assistant_msg = _save_msg(conv_id, "assistant", f"Search failed: {search_err}", {"type": "error"})
+                return {"assistant_message": assistant_msg}
             papers = _parse_paper_results(result)
             paper_ids = [p["paper_id"] for p in papers]
             _publish_log(conv_id, "search_papers", "done", f"Found {len(paper_ids)} paper(s)", {"paper_ids": paper_ids})
@@ -596,35 +604,6 @@ async def send_message(conv_id: str, body: dict, request: Request):
                 "papers": [{"paper_id": p["paper_id"], "title": p.get("title", "")} for p in papers],
             })
 
-        elif intent == "info":
-            _publish_log(conv_id, "extract_info", "running", f"Fetching info for paper: {params.get('paper_id')}")
-            result = await session.call_tool("extract_info", params)
-            parsed = _parse_first(result)
-            if isinstance(parsed, dict) and "title" in parsed:
-                msg = f"**{parsed.get('title', 'Untitled')}** - " + ", ".join(parsed.get("authors", ["Unknown"]))
-                _publish_log(conv_id, "extract_info", "done", f"Found: {parsed.get('title')}")
-            else:
-                msg = str(parsed) if parsed else "Paper not found."
-                _publish_log(conv_id, "extract_info", "error", msg)
-            assistant_msg = _save_msg(conv_id, "assistant", msg, {
-                "type": "info", "paper_id": params.get("paper_id"), "data": parsed if isinstance(parsed, dict) else {},
-            })
-
-        elif intent == "index":
-            _publish_log(conv_id, "index_paper", "running", f"Indexing paper: {params.get('paper_id')}")
-            result = await session.call_tool("index_paper", params)
-            parsed = _parse_first(result)
-            if isinstance(parsed, dict) and parsed.get("status") == "ok":
-                msg = f"Indexed {parsed.get('total_chunks')} chunks for {parsed.get('paper_id')}."
-                _publish_log(conv_id, "index_paper", "done", msg, parsed)
-            else:
-                err = parsed.get("error", "Unknown error") if isinstance(parsed, dict) else str(parsed)
-                msg = f"Indexing failed: {err}"
-                _publish_log(conv_id, "index_paper", "error", msg)
-            assistant_msg = _save_msg(conv_id, "assistant", msg, {
-                "type": "index", "data": parsed if isinstance(parsed, dict) else {},
-            })
-
         elif intent == "query":
             query_params = {"question": params.get("question", content)}
             active = _active_papers.get(conv_id)
@@ -636,10 +615,10 @@ async def send_message(conv_id: str, body: dict, request: Request):
             _publish_log(conv_id, "query_paper", "running", f"Querying {scope}: {params.get('question')[:60]}...", {"scope": scope})
             result = await session.call_tool("query_paper", query_params)
             parsed = _parse_first(result)
-            answer = parsed.get("answer", "") if isinstance(parsed, dict) else ""
+            answer = (parsed.get("answer") or "") if isinstance(parsed, dict) else ""
             results = parsed.get("results", []) if isinstance(parsed, dict) else []
 
-            if not results or _is_apology(answer):
+            if not results:
                 if active:
                     # Strict scoping — no arXiv fallback when a paper is selected
                     _publish_log(conv_id, "query_paper", "done", "No relevant info found for this question in the selected paper.")
@@ -696,9 +675,9 @@ async def send_message(conv_id: str, body: dict, request: Request):
                 _publish_log(conv_id, "query_paper", "running", f"Querying paper: {active.get('title', active['paper_id'])}")
             result = await session.call_tool("query_paper", query_params)
             parsed = _parse_first(result)
-            answer = parsed.get("answer", "") if isinstance(parsed, dict) else ""
+            answer = (parsed.get("answer") or "") if isinstance(parsed, dict) else ""
             results = parsed.get("results", []) if isinstance(parsed, dict) else []
-            if active and (not results or _is_apology(answer)):
+            if active and not results:
                 msg = f"I can only answer questions related to **{active.get('title', active['paper_id'])}**. Your question doesn't seem to be covered by this paper. Please ask something about the paper."
                 assistant_msg = _save_msg(conv_id, "assistant", msg, {"type": "query_no_answer", "answer": answer, "results": results, "question": content, "active_paper": active})
             else:
@@ -712,6 +691,10 @@ async def send_message(conv_id: str, body: dict, request: Request):
 
     except Exception as e:
         _publish_log(conv_id, intent, "error", str(e))
+        err_str = str(e).lower()
+        if "connection closed" in err_str or "connection refused" in err_str or "eof" in err_str:
+            session = None
+            _publish_log(conv_id, intent, "recovery", "Session marked dead, will restart on next request")
         err_msg = _save_msg(conv_id, "assistant", f"Error: {str(e)}", {"type": "error", "error": str(e)})
         return {"user_message": user_msg, "assistant_message": err_msg}
 
@@ -746,7 +729,7 @@ async def add_paper(conv_id: str, body: dict, request: Request):
 async def select_paper(conv_id: str, body: dict, request: Request):
     """Select a paper for a conversation: index it, get info, set as active paper."""
     _ensure_supabase()
-    _ensure_session()
+    await _ensure_session()
     _verify_conv_owner(conv_id, _get_user_from_request(request))
     paper_id = body.get("paper_id", "").strip()
     title = body.get("title", "")
@@ -758,13 +741,29 @@ async def select_paper(conv_id: str, body: dict, request: Request):
         }).execute()
     except Exception:
         pass
-    # Check if already indexed
+    # Check if already indexed (local flag + actual Redis data)
     info_result = await session.call_tool("extract_info", {"paper_id": paper_id})
     info_parsed = _parse_first(info_result)
     info = info_parsed if isinstance(info_parsed, dict) else {}
     already_indexed = isinstance(info, dict) and info.get("indexed") is True
     if already_indexed:
-        total_chunks = info.get("total_chunks", info.get("chunk_count", 0))
+        import redis.asyncio as aioredis
+        try:
+            rr = aioredis.Redis.from_url(os.environ.get("REDIS_URL", ""), protocol=2, socket_connect_timeout=5, socket_timeout=5, decode_responses=True)
+            cursor = 0
+            found = 0
+            while True:
+                cursor, keys = await rr.scan(cursor=cursor, match=f"doc:paper:{paper_id}:chunk:*", count=10)
+                found += len(keys)
+                if cursor == 0:
+                    break
+            await rr.aclose()
+            if found == 0:
+                already_indexed = False
+        except Exception:
+            pass
+    if already_indexed:
+        total_chunks = info.get("total_chunks", info.get("chunk_count", 0)) or 0
     else:
         idx_result = await session.call_tool("index_paper", {"paper_id": paper_id})
         idx_parsed = _parse_first(idx_result)
@@ -798,7 +797,7 @@ async def get_active_paper(conv_id: str, request: Request):
 
 @app.post("/api/search")
 async def api_search(req_body: dict):
-    _ensure_session()
+    await _ensure_session()
     try:
         result = await session.call_tool("search_papers", {"topic": req_body.get("topic", ""), "max_results": req_body.get("max_results", 5)})
         parsed = _parse_first(result)
@@ -813,37 +812,10 @@ async def api_search(req_body: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/info")
-async def api_info(req_body: dict):
-    _ensure_session()
-    try:
-        result = await session.call_tool("extract_info", {"paper_id": req_body.get("paper_id", "")})
-        parsed = _parse_first(result)
-        if parsed is None:
-            return {"found": False, "error": "No response from server"}
-        if isinstance(parsed, str) and "no saved information" in parsed.lower():
-            return {"found": False, "error": parsed}
-        return {"found": True, "info": parsed}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/index")
-async def api_index(req_body: dict):
-    _ensure_session()
-    try:
-        result = await session.call_tool("index_paper", {"paper_id": req_body.get("paper_id", "")})
-        parsed = _parse_first(result)
-        if parsed is None:
-            return {"status": "error", "error": "No response from server"}
-        return parsed
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/query")
 async def api_query(req_body: dict):
-    _ensure_session()
+    await _ensure_session()
     try:
         params = {"question": req_body.get("question", "")}
         if req_body.get("paper_id", "").strip():
@@ -859,14 +831,15 @@ async def api_query(req_body: dict):
 
 @app.get("/api/health")
 async def health():
-    _ensure_session()
+    await _ensure_session()
     return {"status": "ok"}
 
 
 # ── User auth endpoints ──
 
 @app.post("/api/auth/register")
-async def register(body: dict):
+async def register(body: dict, request: Request):
+    _check_rate_limit(request)
     _ensure_supabase()
     email = body.get("email", "").strip().lower()
     username = body.get("username", "").strip()
@@ -987,7 +960,8 @@ def send_password_reset_email(user_email: str, reset_token: str):
 
 
 @app.post("/api/auth/forgot-password")
-async def forgot_password(body: dict):
+async def forgot_password(body: dict, request: Request):
+    _check_rate_limit(request)
     _ensure_supabase()
     email = body.get("email", "").strip().lower()
     if not email:
@@ -1071,7 +1045,8 @@ async def reset_password_execute(body: dict):
 
 
 @app.post("/api/auth/login")
-async def login(body: dict):
+async def login(body: dict, request: Request):
+    _check_rate_limit(request)
     _ensure_supabase()
     email = body.get("email", "").strip().lower()
     password = body.get("password", "").strip()
@@ -1125,7 +1100,8 @@ async def serve_admin():
 
 
 @app.post("/api/admin/setup")
-async def admin_setup(body: dict):
+async def admin_setup(body: dict, request: Request):
+    _check_rate_limit(request)
     """Create the first admin account (auto-creates admins table if needed)."""
     try:
         _ensure_supabase()
@@ -1160,7 +1136,8 @@ async def admin_setup(body: dict):
 
 
 @app.post("/api/admin/login")
-async def admin_login(body: dict):
+async def admin_login(body: dict, request: Request):
+    _check_rate_limit(request)
     _ensure_supabase()
     username = body.get("username", "").strip()
     password = body.get("password", "").strip()
@@ -1192,7 +1169,7 @@ async def admin_verify(body: dict):
 async def admin_stats(request: Request):
     _require_admin(request)
     _ensure_supabase()
-    _ensure_session()
+    await _ensure_session()
     conv_res = supabase.table("conversations").select("id", count="exact").execute()
     msg_res = supabase.table("messages").select("id", count="exact").execute()
     paper_res = supabase.table("conversation_papers").select("id", count="exact").execute()
@@ -1260,6 +1237,61 @@ async def admin_supabase_project():
     return {"project_ref": ref, "sql_editor_url": f"https://supabase.com/dashboard/project/{ref}/sql/new" if ref else None}
 
 
+LOCAL_PAPERS_DIR = os.path.join(HERE, "papers")
+
+
+@app.get("/api/admin/local-papers")
+async def admin_local_papers(request: Request):
+    _require_admin(request)
+    if not os.path.isdir(LOCAL_PAPERS_DIR):
+        return {"topics": []}
+    topics = []
+    for entry in sorted(os.listdir(LOCAL_PAPERS_DIR)):
+        json_path = os.path.join(LOCAL_PAPERS_DIR, entry, "papers_info.json")
+        if os.path.isfile(json_path):
+            try:
+                with open(json_path, encoding="utf-8") as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+            papers = []
+            for pid, info in data.items():
+                papers.append({
+                    "paper_id": pid,
+                    "title": info.get("title", "Untitled"),
+                    "indexed": info.get("indexed", False),
+                })
+            if papers:
+                topics.append({"topic": entry, "papers": papers})
+    return {"topics": topics}
+
+
+@app.delete("/api/admin/local-papers/{paper_id}")
+async def admin_delete_local_paper(paper_id: str, request: Request):
+    _require_admin(request)
+    if not os.path.isdir(LOCAL_PAPERS_DIR):
+        raise HTTPException(404, detail="Papers directory not found")
+    for entry in os.listdir(LOCAL_PAPERS_DIR):
+        json_path = os.path.join(LOCAL_PAPERS_DIR, entry, "papers_info.json")
+        if not os.path.isfile(json_path):
+            continue
+        try:
+            with open(json_path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        if paper_id in data:
+            del data[paper_id]
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            # Remove empty topic folder
+            if not data:
+                import shutil
+                shutil.rmtree(os.path.join(LOCAL_PAPERS_DIR, entry), ignore_errors=True)
+            return {"status": "ok", "paper_id": paper_id, "topic": entry}
+    raise HTTPException(404, detail=f"Paper {paper_id} not found")
+
+
 @app.get("/api/admin/activity")
 async def admin_activity(request: Request):
     """Daily conversation and message counts for the last 30 days."""
@@ -1290,7 +1322,7 @@ async def admin_activity(request: Request):
 @app.post("/api/admin/redis/clear")
 async def admin_redis_clear(request: Request):
     _require_admin(request)
-    _ensure_session()
+    await _ensure_session()
     result = await session.call_tool("admin_redis_clear", {})
     parsed = _parse_first(result) or {}
     _cache.clear()

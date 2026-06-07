@@ -1,22 +1,49 @@
+# ── MUST be first: redirect all print() to stderr before any library imports ──
+# Any library that prints during import or runtime corrupts the MCP stdio protocol
+import builtins as _builtins
+import sys as _sys
+_orig_print = _builtins.print
+_builtins.print = lambda *a, **kw: _orig_print(*a, **kw) if 'file' in kw else _orig_print(*a, file=_sys.stderr, **kw)
+
 import asyncio
 import json
 import logging
 import os
-from contextlib import AsyncExitStack
 from typing import List
 
 import arxiv
 import fitz
 import httpx
-import pymupdf4llm
+import numpy as np
+import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from litellm import embedding, completion
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+import litellm
+litellm.suppress_debug_info = True
 from mcp.server.fastmcp import FastMCP
 
 logger = logging.getLogger("research")
 logging.basicConfig(level=logging.INFO, stream=__import__("sys").stderr)
+_log_file = __import__("sys").stderr
+try:
+    import tempfile, atexit
+    _fh = __import__("logging").FileHandler(__import__("os").path.join(tempfile.gettempdir(), "research_server_crash.log"), mode="a")
+    _fh.setLevel(__import__("logging").INFO)
+    _fh.setFormatter(__import__("logging").Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    logger.addHandler(_fh)
+    import builtins as _b
+    _b._logfile = _fh
+    import atexit as _atexit
+    _atexit.register(lambda: logger.info("research_server.py EXIT"))
+except Exception:
+    pass
+
+# Log any unhandled exception before the process dies
+def _fatal_hook(exc_type, exc_value, exc_tb):
+    import traceback
+    logger.critical("Unhandled exception: %s", "".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
+    __import__("sys").stderr.flush()
+__import__("sys").excepthook = _fatal_hook
 
 load_dotenv()
 
@@ -30,18 +57,57 @@ EMBEDDING_DIMS = 3072
 # LLM config for answer generation
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini/gemma-4-31b-it")
 
-# Redis MCP server config — reads URL from env for security
+# Direct Redis connection (no MCP subprocess — eliminates subprocess crash issues)
 REDIS_URL = os.getenv("REDIS_URL")
-REDIS_MCP_CONFIG = {
-    "command": "uvx",
-    "args": [
-        "--from",
-        "redis-mcp-server@latest",
-        "redis-mcp-server",
-        "--url",
+_redis: aioredis.Redis | None = None
+
+
+async def _ensure_redis() -> aioredis.Redis:
+    """Return a direct Redis connection, creating one lazily."""
+    global _redis
+    if _redis is not None:
+        try:
+            await _redis.ping()
+            return _redis
+        except Exception:
+            logger.info("Redis connection lost, reconnecting...")
+            _redis = None
+    r = aioredis.Redis.from_url(
         REDIS_URL,
-    ],
-}
+        protocol=2,
+        socket_connect_timeout=15,
+        socket_timeout=30,
+        retry_on_timeout=True,
+        decode_responses=True,
+    )
+    await r.ping()
+    logger.info("Direct Redis connection ready")
+    _redis = r
+    return _redis
+
+
+async def _redis_init_index():
+    """Create the vector search index if it doesn't already exist."""
+    try:
+        r = await _ensure_redis()
+        from redis.commands.search.field import TextField, VectorField
+        from redis.commands.search.indexDefinition import IndexDefinition, IndexType
+        schema = (
+            TextField("text"),
+            TextField("paper_id"),
+            TextField("chunk_index"),
+            VectorField("vector", "FLAT", {"TYPE": "FLOAT32", "DIM": EMBEDDING_DIMS, "DISTANCE_METRIC": "COSINE"}),
+        )
+        definition = IndexDefinition(prefix=["doc:paper:"], index_type=IndexType.HASH)
+        await r.ft("idx:chunks").create_index(schema, definition=definition)
+        logger.info("Vector index 'idx:chunks' created")
+    except Exception as e:
+        logger.info("Vector index creation note (may already exist): %s", e)
+
+
+def _pack_vector(vector: list) -> bytes:
+    """Pack a float list into float32 bytes for Redis vector storage."""
+    return np.array(vector, dtype=np.float32).tobytes()
 
 mcp = FastMCP("research")
 
@@ -57,10 +123,26 @@ def _get_embedding(text: str) -> List[float]:
     return response.data[0]["embedding"]
 
 
-def _get_embeddings_batch(texts: List[str]) -> List[List[float]]:
-    """Generate embedding vectors for a batch of texts in one API call."""
-    response = embedding(model=EMBEDDING_MODEL, input=texts)
-    return [item["embedding"] for item in response.data]
+def _get_embeddings_batch(texts: List[str], batch_size: int = 10, max_retries: int = 3) -> List[List[float]]:
+    """Generate embedding vectors in small batches with retry on 429."""
+    results: List[List[float]] = []
+    import time as _time
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start:start + batch_size]
+        for attempt in range(max_retries):
+            try:
+                response = embedding(model=EMBEDDING_MODEL, input=batch)
+                results.extend(item["embedding"] for item in response.data)
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning("Rate limited on batch %d, retrying in %ds...", start // batch_size, wait)
+                    _sys.stderr.flush()
+                    _time.sleep(wait)
+                else:
+                    raise
+    return results
 
 
 def _update_indexed_flag(paper_id: str):
@@ -82,35 +164,52 @@ def _update_indexed_flag(paper_id: str):
                 continue
 
 
-def _extract_text_chunks(pdf_bytes: bytes) -> List[str]:
-    """Extract markdown text from PDF bytes and split into chunks."""
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    md_text = pymupdf4llm.to_markdown(doc)
-    doc.close()
+def _extract_text_chunks(pdf_bytes: bytes) -> tuple[list[str], str]:
+    """Extract text from PDF bytes using PyMuPDF directly and split into chunks.
+    Returns (chunks, error_msg)."""
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        all_text = ""
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            all_text += page.get_text("text") + "\n"
+        doc.close()
+    except Exception as e:
+        logger.warning("PDF extraction failed: %s", e)
+        return [], f"PDF extraction error: {e}"
 
-    if not md_text.strip():
-        return []
+    if not all_text.strip():
+        return [], "PDF produced no text content"
 
-    return [c.strip() for c in md_text.split("\n## ") if c.strip()]
+    paras = [p.strip() for p in all_text.split("\n\n") if p.strip()]
 
+    MIN_CHUNK = 400
+    MAX_CHUNK = 2000
+    chunks = []
+    buf = ""
+    for para in paras:
+        if len(buf) + len(para) < MAX_CHUNK and (not buf or len(buf) < MIN_CHUNK):
+            buf = (buf + "\n\n" + para).strip()
+        else:
+            if buf:
+                chunks.append(buf)
+            buf = para
+    if buf:
+        chunks.append(buf)
 
-async def _get_redis_session(exit_stack: AsyncExitStack) -> ClientSession:
-    """Create and initialize an MCP client session to the Redis MCP server."""
-    server_params = StdioServerParameters(**REDIS_MCP_CONFIG)
-    read, write = await exit_stack.enter_async_context(stdio_client(server_params))
-    session = await exit_stack.enter_async_context(ClientSession(read, write))
-    await session.initialize()
-    return session
+    if not chunks:
+        return [], "Splitting produced no chunks"
+    return chunks, ""
+
 
 
 def _generate_answer(question: str, chunks: list) -> str:
     """Generate an LLM answer grounded on the retrieved chunks."""
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
-        payload = chunk.get("payload") or chunk
-        text = payload.get("text", "")
-        pid = payload.get("paper_id", "unknown")
-        cidx = payload.get("chunk_index", i - 1)
+        text = chunk.get("text", "") if isinstance(chunk, dict) else str(chunk)
+        pid = chunk.get("paper_id", "unknown") if isinstance(chunk, dict) else "unknown"
+        cidx = chunk.get("chunk_index", i - 1) if isinstance(chunk, dict) else i - 1
         context_parts.append(f"[Source: paper {pid}, chunk #{cidx}]\n{text}")
 
     context = "\n\n".join(context_parts)
@@ -130,7 +229,7 @@ def _generate_answer(question: str, chunks: list) -> str:
         temperature=0.3,
         max_tokens=1024,
     )
-    return response.choices[0].message.content
+    return response.choices[0].message.content or ""
 
 
 # ─────────────────────────────────────────────
@@ -239,18 +338,30 @@ async def index_paper(paper_id: str) -> str:
 
     try:
         # ── Step 1: Download PDF ──────────────────────────────────────
+        logger.info("index_paper[%s]: downloading PDF...", paper_id)
+        _sys.stderr.flush()
         response = httpx.get(pdf_url, timeout=60, follow_redirects=True)
         response.raise_for_status()
+        logger.info("index_paper[%s]: PDF downloaded (%.1f KB)", paper_id, len(response.content) / 1024)
+        _sys.stderr.flush()
 
         # ── Step 2: Extract text chunks ───────────────────────────────
-        chunks = _extract_text_chunks(response.content)
-        if not chunks:
+        logger.info("index_paper[%s]: extracting text chunks...", paper_id)
+        _sys.stderr.flush()
+        chunks, err = _extract_text_chunks(response.content)
+        if err or not chunks:
             return json.dumps(
-                {"status": "error", "error": "No text extracted from PDF"}
+                {"status": "error", "error": f"No text extracted from PDF: {err}"}
             )
+        logger.info("index_paper[%s]: extracted %d chunks", paper_id, len(chunks))
+        _sys.stderr.flush()
 
         # ── Step 3: Batch embed all chunks ────────────────────────────
+        logger.info("index_paper[%s]: embedding %d chunks via %s...", paper_id, len(chunks), EMBEDDING_MODEL)
+        _sys.stderr.flush()
         vectors = _get_embeddings_batch(chunks)
+        logger.info("index_paper[%s]: embedding done (%d vectors)", paper_id, len(vectors))
+        _sys.stderr.flush()
 
         # ── Step 4: Look up paper metadata from local files ───────────
         paper_meta = None
@@ -258,72 +369,56 @@ async def index_paper(paper_id: str) -> str:
         if not info_str.startswith("There's no saved"):
             paper_meta = json.loads(info_str)
 
-        # ── Step 5: Push everything to Redis via MCP sub-session ──────
-        async with AsyncExitStack() as stack:
-            redis_session = await _get_redis_session(stack)
+        # ── Step 5: Push everything to Redis directly ─────────────────
+        try:
+            r = await _ensure_redis()
+        except Exception as e:
+            logger.error("Failed to connect to Redis: %s", e)
+            return json.dumps({"status": "error", "paper_id": paper_id, "error": f"Redis connection failed: {e}"})
 
-            # Create vector index (safely ignore if it already exists)
-            try:
-                await redis_session.call_tool(
-                    "create_vector_index_hash",
-                    {
-                        "index_name": "idx:chunks",
-                        "prefix": "doc:paper:",
-                        "dim": EMBEDDING_DIMS,
-                    },
-                )
-            except Exception as e:
-                # Often throws if it already exists, which is fine
-                logger.info("Vector index creation note: %s", e)
+        # Create vector index (safely ignore if it already exists)
+        await _redis_init_index()
 
-            # Store paper metadata
-            meta_to_store = paper_meta or {
+        # Store paper metadata as JSON
+        meta_to_store = paper_meta or {
+            "paper_id": paper_id,
+            "pdf_url": pdf_url,
+        }
+        try:
+            await r.json().set(f"paper:{paper_id}", "$", meta_to_store)
+        except Exception as e:
+            logger.error("Failed to store paper metadata in Redis: %s", e)
+
+        # Batch-store all chunks in Redis via one pipeline
+        logger.info("index_paper[%s]: pushing %d chunks to Redis via pipeline...", paper_id, len(chunks))
+        _sys.stderr.flush()
+        pipe = r.pipeline(transaction=False)
+        for i, (chunk_text, vector) in enumerate(zip(chunks, vectors)):
+            redis_key = f"{REDIS_PREFIX}paper:{paper_id}:chunk:{i}"
+            pipe.hset(redis_key, mapping={
+                "text": chunk_text,
                 "paper_id": paper_id,
-                "pdf_url": pdf_url,
-            }
-            await redis_session.call_tool(
-                "json_set",
-                {
-                    "name": f"paper:{paper_id}",
-                    "path": "$",
-                    "value": json.dumps(meta_to_store),
-                },
-            )
+                "chunk_index": str(i),
+                "vector": _pack_vector(vector),
+            })
+        stored = len(chunks)
+        try:
+            await pipe.execute()
+        except Exception as e:
+            logger.error("Redis pipeline failed after %d chunks: %s", stored, e)
+            return json.dumps({"status": "error", "paper_id": paper_id, "error": f"Redis write failed: {e}"})
 
-            # Store each chunk: text metadata + embedding vector
-            for i, (chunk_text, vector) in enumerate(zip(chunks, vectors)):
-                redis_key = f"{REDIS_PREFIX}paper:{paper_id}:chunk:{i}"
-
-                # Store text fields in hash
-                await redis_session.call_tool(
-                    "hset", {"name": redis_key, "key": "text", "value": chunk_text}
-                )
-                await redis_session.call_tool(
-                    "hset", {"name": redis_key, "key": "paper_id", "value": paper_id}
-                )
-                await redis_session.call_tool(
-                    "hset", {"name": redis_key, "key": "chunk_index", "value": str(i)}
-                )
-
-                # Store embedding vector
-                await redis_session.call_tool(
-                    "set_vector_in_hash",
-                    {
-                        "name": redis_key,
-                        "vector": vector,
-                    },
-                )
-
-        # ── Step 6: Mark as indexed locally ───────────────────────────
-        _update_indexed_flag(paper_id)
+        if stored:
+            _update_indexed_flag(paper_id)
 
         return json.dumps(
             {
-                "status": "ok",
+                "status": "ok" if stored else "error",
                 "paper_id": paper_id,
                 "title": (paper_meta or {}).get("title", "Unknown"),
                 "total_chunks": len(chunks),
-                "message": f"Successfully indexed {len(chunks)} chunks into Redis",
+                "stored_chunks": stored,
+                "message": f"Indexed {stored}/{len(chunks)} chunks into Redis",
             }
         )
 
@@ -348,43 +443,45 @@ async def query_paper(question: str, paper_id: str = "") -> str:
     """
     try:
         # ── Step 1: Embed the question ────────────────────────────────
-        query_vector = _get_embedding(question)
+        logger.info("query_paper: embedding question (len=%d) via LLM API...", len(question))
+        import sys as _sys
+        _sys.stderr.flush()
+        try:
+            query_vector = _get_embedding(question)
+        except Exception as e:
+            logger.error("query_paper: embedding failed: %s", e)
+            return json.dumps({"status": "error", "error": f"Embedding failed: {e}"})
 
-        # ── Step 2: Search Redis via MCP sub-session ──────────────────
-        async with AsyncExitStack() as stack:
-            redis_session = await _get_redis_session(stack)
+        # ── Step 2: Search Redis directly with vector similarity ──────
+        logger.info("query_paper: performing vector search...")
+        _sys.stderr.flush()
 
-            # Vector similarity search
-            search_result = await redis_session.call_tool(
-                "vector_search_hash",
-                {
-                    "index_name": "idx:chunks",
-                    "query_vector": query_vector,
-                    "k": 5,
-                    "return_fields": ["text", "chunk_index", "paper_id"]
-                },
+        try:
+            r = await _ensure_redis()
+            from redis.commands.search.query import Query
+            query_vector_bytes = _pack_vector(query_vector)
+            q = Query("*=>[KNN 15 @vector $vec AS score]") \
+                .return_fields("text", "paper_id", "chunk_index", "score") \
+                .sort_by("score") \
+                .dialect(2)
+            search_result = await r.ft("idx:chunks").search(
+                q, query_params={"vec": query_vector_bytes}
             )
+        except Exception as e:
+            logger.error("query_paper: vector search failed: %s", e)
+            _sys.stderr.flush()
+            return json.dumps({"status": "error", "error": f"vector search failed: {e}"})
 
-            # Parse results and fetch chunk texts
-            results = []
-            if search_result and search_result.content:
-                for item in search_result.content:
-                    if hasattr(item, "text"):
-                        try:
-                            parsed = json.loads(item.text)
-                            if isinstance(parsed, list):
-                                for doc in parsed:
-                                    # Extract fields which are inside doc["payload"]
-                                    payload = doc.get("payload") or {}
-                                    if paper_id and paper_id != "all":
-                                        if payload.get("paper_id") == paper_id:
-                                            results.append(doc)
-                                    else:
-                                        results.append(doc)
-                            else:
-                                results.append(parsed)
-                        except (json.JSONDecodeError, TypeError):
-                            results.append({"raw": item.text})
+        # Parse results
+        results = []
+        if hasattr(search_result, "docs"):
+            for doc in search_result.docs:
+                payload = {"text": doc.text, "paper_id": doc.paper_id, "chunk_index": doc.chunk_index, "score": doc.score}
+                if paper_id and paper_id != "all":
+                    if payload.get("paper_id") == paper_id:
+                        results.append(payload)
+                else:
+                    results.append(payload)
 
         # ── Step 3: Generate LLM answer from chunks ────────────────────
         answer = _generate_answer(question, results) if results else ""
@@ -412,31 +509,18 @@ async def admin_list_papers() -> str:
         JSON array of paper IDs that have been indexed.
     """
     try:
-        async with AsyncExitStack() as stack:
-            redis_session = await _get_redis_session(stack)
-            result = await redis_session.call_tool("scan_keys", {"pattern": "doc:paper:*:chunk:0"})
-            paper_ids = set()
-            if result and result.content:
-                for item in result.content:
-                    if hasattr(item, "text"):
-                        try:
-                            data = json.loads(item.text)
-                            if isinstance(data, dict):
-                                keys = data.get("keys", data.get("result", []))
-                                if isinstance(keys, list):
-                                    for k in keys:
-                                        parts = k.split(":")
-                                        if len(parts) >= 3:
-                                            paper_ids.add(parts[2])
-                        except (json.JSONDecodeError, TypeError):
-                            raw = item.text.strip()
-                            for possible_key in raw.replace("[", "").replace("]", "").replace('"', "").split(","):
-                                pk = possible_key.strip()
-                                if pk and ":" in pk:
-                                    parts = pk.split(":")
-                                    if len(parts) >= 3:
-                                        paper_ids.add(parts[2])
-            return json.dumps(sorted(paper_ids))
+        r = await _ensure_redis()
+        paper_ids = set()
+        cursor = 0
+        while True:
+            cursor, keys = await r.scan(cursor=cursor, match="doc:paper:*:chunk:0", count=100)
+            for k in keys:
+                parts = k.split(":")
+                if len(parts) >= 3:
+                    paper_ids.add(parts[2])
+            if cursor == 0:
+                break
+        return json.dumps(sorted(paper_ids))
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -452,28 +536,18 @@ async def admin_delete_paper(paper_id: str) -> str:
         JSON with status and count of deleted keys
     """
     try:
-        async with AsyncExitStack() as stack:
-            redis_session = await _get_redis_session(stack)
-            result = await redis_session.call_tool("scan_keys", {"pattern": f"doc:paper:{paper_id}:*"})
-            deleted = 0
-            if result and result.content:
-                for item in result.content:
-                    if hasattr(item, "text"):
-                        try:
-                            data = json.loads(item.text)
-                            keys = []
-                            if isinstance(data, dict):
-                                keys = data.get("keys", data.get("result", []))
-                            elif isinstance(data, list):
-                                keys = data
-                            if isinstance(keys, list):
-                                for k in keys:
-                                    await redis_session.call_tool("del", {"key": k})
-                                    deleted += 1
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-            await redis_session.call_tool("del", {"key": f"paper:{paper_id}"})
-            return json.dumps({"status": "ok", "paper_id": paper_id, "deleted_keys": deleted})
+        r = await _ensure_redis()
+        keys_to_delete = []
+        cursor = 0
+        while True:
+            cursor, keys = await r.scan(cursor=cursor, match=f"doc:paper:{paper_id}:*", count=100)
+            keys_to_delete.extend(keys)
+            if cursor == 0:
+                break
+        keys_to_delete.append(f"paper:{paper_id}")
+        if keys_to_delete:
+            await r.delete(*keys_to_delete)
+        return json.dumps({"status": "ok", "paper_id": paper_id, "deleted_keys": len(keys_to_delete)})
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
 
@@ -486,36 +560,25 @@ async def admin_redis_stats() -> str:
         JSON with paper_count and chunk_count
     """
     try:
-        async with AsyncExitStack() as stack:
-            redis_session = await _get_redis_session(stack)
-            result = await redis_session.call_tool("scan_keys", {"pattern": "doc:paper:*:chunk:0"})
-            papers = set()
-            if result and result.content:
-                for item in result.content:
-                    if hasattr(item, "text"):
-                        try:
-                            data = json.loads(item.text)
-                            keys = data.get("keys", data.get("result", [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-                            if isinstance(keys, list):
-                                for k in keys:
-                                    parts = k.split(":")
-                                    if len(parts) >= 3:
-                                        papers.add(parts[2])
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-            result2 = await redis_session.call_tool("scan_keys", {"pattern": "doc:paper:*:chunk:*"})
-            chunks = 0
-            if result2 and result2.content:
-                for item in result2.content:
-                    if hasattr(item, "text"):
-                        try:
-                            data = json.loads(item.text)
-                            keys = data.get("keys", data.get("result", [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-                            if isinstance(keys, list):
-                                chunks += len(keys)
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-            return json.dumps({"paper_count": len(papers), "chunk_count": chunks})
+        r = await _ensure_redis()
+        papers = set()
+        cursor = 0
+        while True:
+            cursor, keys = await r.scan(cursor=cursor, match="doc:paper:*:chunk:0", count=100)
+            for k in keys:
+                parts = k.split(":")
+                if len(parts) >= 3:
+                    papers.add(parts[2])
+            if cursor == 0:
+                break
+        chunk_count = 0
+        cursor = 0
+        while True:
+            cursor, keys = await r.scan(cursor=cursor, match="doc:paper:*:chunk:*", count=100)
+            chunk_count += len(keys)
+            if cursor == 0:
+                break
+        return json.dumps({"paper_count": len(papers), "chunk_count": chunk_count})
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -528,27 +591,18 @@ async def admin_redis_clear() -> str:
         JSON with status and count of deleted keys.
     """
     try:
-        async with AsyncExitStack() as stack:
-            redis_session = await _get_redis_session(stack)
-            patterns = ["doc:paper:*", "paper:*"]
-            all_keys: list[str] = []
-            for pattern in patterns:
-                result = await redis_session.call_tool("scan_keys", {"pattern": pattern})
-                if result and result.content:
-                    for item in result.content:
-                        if hasattr(item, "text"):
-                            try:
-                                data = json.loads(item.text)
-                                keys = data.get("keys", data.get("result", [])) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-                                if isinstance(keys, list):
-                                    all_keys.extend(keys)
-                            except (json.JSONDecodeError, TypeError):
-                                pass
-            deleted = 0
-            for key in all_keys:
-                await redis_session.call_tool("del", {"key": key})
-                deleted += 1
-            return json.dumps({"status": "ok", "deleted_keys": deleted})
+        r = await _ensure_redis()
+        all_keys: list[str] = []
+        for pattern in ["doc:paper:*", "paper:*"]:
+            cursor = 0
+            while True:
+                cursor, keys = await r.scan(cursor=cursor, match=pattern, count=100)
+                all_keys.extend(keys)
+                if cursor == 0:
+                    break
+        if all_keys:
+            await r.delete(*all_keys)
+        return json.dumps({"status": "ok", "deleted_keys": len(all_keys)})
     except Exception as e:
         return json.dumps({"status": "error", "error": str(e)})
 

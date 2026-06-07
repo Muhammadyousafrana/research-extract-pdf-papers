@@ -132,6 +132,8 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.875em;backgr
 }
 .chat-header .chat-title{font-size:0.95rem;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chat-header .chat-meta{font-size:0.75rem;color:var(--text-muted);white-space:nowrap}
+.log-toggle-btn{background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all var(--transition)}
+.log-toggle-btn:hover{color:var(--text);background:var(--bg-card)}
 .messages-area{
   flex:1;
   overflow-y:auto;
@@ -139,7 +141,7 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.875em;backgr
 }
 .messages-area:empty{display:flex;align-items:center;justify-content:center}
 .messages-area:empty::after{
-  content:"Send a message to start chatting. Try /search machine learning or ask a question about indexed papers.";
+  content:"Search arXiv papers and ask questions about them.";
   color:var(--text-muted);
   font-size:0.875rem;
   text-align:center;
@@ -445,18 +447,17 @@ code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.875em;backgr
       <div class="chat-title" id="chat-title">New Chat</div>
       <div id="active-paper-badge" style="display:none"></div>
       <div class="chat-meta" id="chat-meta"></div>
+      <button class="log-toggle-btn" onclick="toggleLogs()" title="Toggle tool activity log">&#9776;</button>
     </div>
     <div class="messages-area" id="messages-area"></div>
     <div class="input-area">
       <div class="input-wrapper">
-        <textarea id="msg-input" rows="1" placeholder='Type a message or use /search, /info, /query...' onkeydown="handleKey(event)" oninput="handleSlash()" disabled></textarea>
+        <textarea id="msg-input" rows="1" placeholder='Type a message or use /search, /query...' onkeydown="handleKey(event)" oninput="handleSlash()" disabled></textarea>
         <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>&#10148;</button>
       </div>
       <div class="slash-hint" id="slash-hint">
         <span class="slash-cmd" onclick="insertSlash('/search ')">/search</span>
-        <span class="slash-cmd" onclick="insertSlash('/info ')">/info</span>
         <span class="slash-cmd" onclick="insertSlash('/query ')">/query</span>
-        <span class="slash-cmd" onclick="insertSlash('/index ')">/index</span>
       </div>
     </div>
   </div>
@@ -735,6 +736,10 @@ function insertSlash(cmd) {
   input.value = cmd;
   input.focus();
   document.getElementById('slash-hint').classList.remove('show');
+}
+
+function toggleLogs() {
+  document.getElementById('log-sidebar').classList.toggle('show');
 }
 
 function clearLogs() {
@@ -1146,16 +1151,6 @@ async function loadActivePaper() {
       updateActivePaperBadge(data.active_paper.title || data.active_paper.paper_id);
     }
   } catch(e) {}
-}
-
-// ── Quick actions ──
-async function quickAction(type, paperId) {
-  if (!currentConvId) {
-    await newConversation();
-  }
-  var text = type === 'info' ? '/info ' + paperId : '/index ' + paperId;
-  document.getElementById('msg-input').value = text;
-  await sendMessage();
 }
 
 // ── Send message ──
