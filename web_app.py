@@ -229,44 +229,33 @@ def _verify_tables():
         return False
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+async def _init_mcp_session():
     global session, exit_stack
+    if session is not None:
+        return
     exit_stack = AsyncExitStack()
     server_params = StdioServerParameters(
         command=sys.executable,
         args=["research_server.py"],
         env={**os.environ},
     )
-    try:
-        read, write = await exit_stack.enter_async_context(stdio_client(server_params))
-        session = await exit_stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
-    except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        msg = f"MCP session init failed (will retry on first request): {e}\n{tb}"
-        print(msg, file=__import__("sys").stderr)
-        try:
-            with open("/tmp/startup_error.log", "w") as f:
-                f.write(msg + "\n")
-        except Exception:
-            pass
-        logger.warning(msg)
-        sys.stderr.flush()
-        session = None
-        try:
-            await exit_stack.aclose()
-        except Exception:
-            pass
-        exit_stack = AsyncExitStack()
+    read, write = await exit_stack.enter_async_context(stdio_client(server_params))
+    session = await exit_stack.enter_async_context(ClientSession(read, write))
+    await session.initialize()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global session, exit_stack
+    exit_stack = AsyncExitStack()
+    session = None
     _verify_tables()
     yield
     try:
         if exit_stack:
             await exit_stack.aclose()
     except Exception:
-        pass  # ignore shutdown ordering issues with stdio_client cancel scopes
+        pass
 
 
 app = FastAPI(title="Research Paper Chat", lifespan=lifespan)
@@ -323,8 +312,9 @@ def _ensure_supabase():
         raise HTTPException(status_code=503, detail="Database not set up. Go to Supabase SQL Editor and run supabase_schema.sql")
 
 
-async def _restart_session():
-    """Try to restart a dead MCP session."""
+async def _ensure_session():
+    if session is not None:
+        return
     global session, exit_stack
     try:
         if exit_stack:
@@ -333,27 +323,11 @@ async def _restart_session():
         pass
     exit_stack = AsyncExitStack()
     try:
-        server_params = StdioServerParameters(
-            command=sys.executable,
-            args=["research_server.py"],
-            env={**os.environ},
-        )
-        read, write = await exit_stack.enter_async_context(stdio_client(server_params))
-        session = await exit_stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
-    except Exception:
-        session = None
-        raise
-
-
-async def _ensure_session():
-    if session is not None:
-        return
-    try:
-        await _restart_session()
+        await _init_mcp_session()
     except HTTPException:
         raise
     except Exception:
+        session = None
         raise HTTPException(status_code=503, detail="MCP server not connected")
 
 
@@ -1485,13 +1459,5 @@ async def admin_cleanup_expired(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    try:
-        port = int(os.environ.get("PORT", 8080))
-        uvicorn.run(app, host="0.0.0.0", port=port)
-    except Exception:
-        import traceback
-        with open("/tmp/startup_error.log", "w") as f:
-            traceback.print_exc(file=f)
-        traceback.print_exc()
-        sys.stderr.flush()
-        raise
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
