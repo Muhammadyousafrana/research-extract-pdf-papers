@@ -313,9 +313,9 @@ def _ensure_supabase():
 
 
 async def _ensure_session():
+    global session, exit_stack
     if session is not None:
         return
-    global session, exit_stack
     try:
         if exit_stack:
             await exit_stack.aclose()
