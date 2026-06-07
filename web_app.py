@@ -244,10 +244,16 @@ async def lifespan(app: FastAPI):
         await session.initialize()
     except Exception as e:
         import traceback
-        msg = f"MCP session init failed (will retry on first request): {e}"
+        tb = traceback.format_exc()
+        msg = f"MCP session init failed (will retry on first request): {e}\n{tb}"
         print(msg, file=__import__("sys").stderr)
-        traceback.print_exc()
+        try:
+            with open("/tmp/startup_error.log", "w") as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
         logger.warning(msg)
+        sys.stderr.flush()
         session = None
         try:
             await exit_stack.aclose()
@@ -1479,5 +1485,13 @@ async def admin_cleanup_expired(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    try:
+        port = int(os.environ.get("PORT", 8080))
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    except Exception:
+        import traceback
+        with open("/tmp/startup_error.log", "w") as f:
+            traceback.print_exc(file=f)
+        traceback.print_exc()
+        sys.stderr.flush()
+        raise
