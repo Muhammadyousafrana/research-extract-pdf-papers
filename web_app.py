@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -110,11 +111,42 @@ END $$;
     except Exception:
         return False
 
-# Admin auth
-_admin_tokens: dict[str, str] = {}  # token -> username
+# Token signing secret — stateless, works across all worker processes
+_TOKEN_SECRET = os.getenv("SECRET_KEY", hashlib.sha256(
+    ((SUPABASE_KEY or "") + (SUPABASE_URL or "")).encode()
+).hexdigest())
 
-# User auth
-_user_sessions: dict[str, dict] = {}  # session_token -> {user_id, email, username}
+
+def _make_signed_token(subject: str, token_type: str, hours: int = 24) -> str:
+    """Create an HMAC-signed self-verifying token with embedded expiry."""
+    exp = int((datetime.now(timezone.utc) + timedelta(hours=hours)).timestamp())
+    payload = json.dumps({"sub": subject, "type": token_type, "exp": exp})
+    payload_b64 = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    sig = hmac.new(_TOKEN_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+
+def _verify_signed_token(token: str, token_type: str) -> str | None:
+    """Verify an HMAC-signed token. Returns subject if valid, None otherwise."""
+    try:
+        parts = token.rsplit(".", 1)
+        if len(parts) != 2:
+            return None
+        payload_b64, sig = parts
+        expected_sig = hmac.new(_TOKEN_SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        padding = 4 - len(payload_b64) % 4
+        if padding != 4:
+            payload_b64 += "=" * padding
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64).decode())
+        if payload.get("type") != token_type:
+            return None
+        if payload.get("exp", 0) < int(datetime.now(timezone.utc).timestamp()):
+            return None
+        return payload.get("sub")
+    except Exception:
+        return None
 
 # Active paper per conversation (conv_id -> {paper_id, title})
 _active_papers: dict[str, dict] = {}
@@ -172,9 +204,10 @@ def _require_admin(request):
     if not auth.startswith("Bearer "):
         raise HTTPException(401, detail="Unauthorized")
     token = auth[7:]
-    if token not in _admin_tokens:
+    username = _verify_signed_token(token, "admin")
+    if not username:
         raise HTTPException(401, detail="Invalid or expired token")
-    return _admin_tokens[token]
+    return username
 
 
 def _publish_log(conv_id: str, tool: str, status: str, message: str, detail: dict = None):
@@ -205,7 +238,17 @@ def _get_user_from_request(request: Request) -> dict | None:
     if not auth.startswith("Bearer "):
         return None
     token = auth[7:]
-    return _user_sessions.get(token)
+    user_id = _verify_signed_token(token, "user")
+    if not user_id:
+        return None
+    try:
+        res = supabase.table("users").select("id,email,username").eq("id", user_id).execute()
+        if not res.data:
+            return None
+        u = res.data[0]
+        return {"user_id": u["id"], "email": u["email"], "username": u["username"]}
+    except Exception:
+        return None
 
 
 def _verify_conv_owner(conv_id: str, user: dict | None):
@@ -1052,35 +1095,36 @@ async def login(body: dict, request: Request):
         raise HTTPException(401, detail="Invalid email or password")
     if not user.get("email_verified"):
         raise HTTPException(403, detail="Email not verified. Check your inbox for the verification email.")
-    # Update last_login
+    # Update last_login and issue a signed session token (stateless, works across all workers)
     supabase.table("users").update({"last_login": datetime.now(timezone.utc).isoformat()}).eq("id", user["id"]).execute()
-    # Create session
-    session_token = secrets.token_urlsafe(48)
-    _user_sessions[session_token] = {
-        "user_id": user["id"],
-        "email": user["email"],
-        "username": user["username"],
-    }
+    session_token = _make_signed_token(user["id"], "user", hours=168)  # 7 days
     return {"status": "ok", "token": session_token, "user": {"id": user["id"], "email": user["email"], "username": user["username"]}}
 
 
 @app.post("/api/auth/me")
 async def auth_me(body: dict):
     token = body.get("token", "")
-    if token in _user_sessions:
-        user_data = _user_sessions[token]
+    user_id = _verify_signed_token(token, "user")
+    if not user_id:
+        return {"authenticated": False}
+    try:
+        _ensure_supabase()
+        res = supabase.table("users").select("id,email,username").eq("id", user_id).execute()
+        if not res.data:
+            return {"authenticated": False}
+        u = res.data[0]
         try:
-            supabase.table("users").update({"last_login": datetime.now(timezone.utc).isoformat()}).eq("id", user_data["user_id"]).execute()
+            supabase.table("users").update({"last_login": datetime.now(timezone.utc).isoformat()}).eq("id", u["id"]).execute()
         except Exception:
             pass
-        return {"authenticated": True, "user": user_data}
-    return {"authenticated": False}
+        return {"authenticated": True, "user": {"user_id": u["id"], "email": u["email"], "username": u["username"]}}
+    except Exception:
+        return {"authenticated": False}
 
 
 @app.post("/api/auth/logout")
 async def logout(body: dict):
-    token = body.get("token", "")
-    _user_sessions.pop(token, None)
+    # Signed tokens are stateless; the client discards the token on logout.
     return {"status": "ok"}
 
 
@@ -1120,8 +1164,7 @@ async def admin_setup(body: dict, request: Request):
             raise HTTPException(400, detail="Password must be at least 8 characters")
         pw_hash = _hash_password(password)
         supabase.table("admins").insert({"username": username, "password_hash": pw_hash}).execute()
-        token = secrets.token_urlsafe(48)
-        _admin_tokens[token] = username
+        token = _make_signed_token(username, "admin", hours=24)
         return {"status": "ok", "token": token, "username": username}
     except HTTPException:
         raise
@@ -1146,16 +1189,16 @@ async def admin_login(body: dict, request: Request):
     admin = res.data[0]
     if not _verify_password(password, admin["password_hash"]):
         raise HTTPException(401, detail="Invalid credentials")
-    token = secrets.token_urlsafe(48)
-    _admin_tokens[token] = username
+    token = _make_signed_token(username, "admin", hours=24)
     return {"status": "ok", "token": token, "username": username}
 
 
 @app.post("/api/admin/verify")
 async def admin_verify(body: dict):
     token = body.get("token", "")
-    if token in _admin_tokens:
-        return {"valid": True, "username": _admin_tokens[token]}
+    username = _verify_signed_token(token, "admin")
+    if username:
+        return {"valid": True, "username": username}
     return {"valid": False}
 
 
