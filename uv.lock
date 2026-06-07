@@ -1776,13 +1776,14 @@ wheels = [
 [[package]]
 name = "research-extract-pdf-papers"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "arxiv" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "litellm" },
     { name = "mcp" },
+    { name = "numpy" },
     { name = "pymupdf4llm" },
     { name = "python-dotenv" },
     { name = "redis" },
@@ -1808,6 +1809,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "litellm", specifier = ">=1.82.2" },
     { name = "mcp", specifier = ">=1.26.0" },
+    { name = "numpy", specifier = ">=2.0.0" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=4.0.5" },
     { name = "pymupdf4llm", specifier = ">=1.27.2.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.2" },
