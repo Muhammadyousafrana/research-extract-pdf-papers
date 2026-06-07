@@ -111,7 +111,7 @@ END $$;
     except Exception:
         return False
 
-# Token signing secret — stateless, works across all worker processes
+# Token signing secret - stateless, works across all worker processes
 _TOKEN_SECRET = os.getenv("SECRET_KEY", hashlib.sha256(
     ((SUPABASE_KEY or "") + (SUPABASE_URL or "")).encode()
 ).hexdigest())
