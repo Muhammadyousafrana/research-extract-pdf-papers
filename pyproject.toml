@@ -10,6 +10,7 @@ dependencies = [
     "httpx>=0.28.1",
     "litellm>=1.82.2",
     "mcp>=1.26.0",
+    "numpy>=2.0.0",
     "pymupdf4llm>=1.27.2.1",
     "python-dotenv>=1.2.2",
     "redis>=8.0.0",
@@ -17,6 +18,10 @@ dependencies = [
     "supabase>=2.31.0",
     "uvicorn>=0.41.0",
 ]
+
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
 
 [project.optional-dependencies]
 dev = [
