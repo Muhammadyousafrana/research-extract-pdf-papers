@@ -2,6 +2,7 @@
 [![Copilot code review](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer/badge.svg)](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/copilot-pull-request-reviewer/copilot-pull-request-reviewer)
 [![Build and Push to GHCR](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/deploy-ghcr.yml/badge.svg)](https://github.com/Muhammadyousafrana/research-extract-pdf-papers/actions/workflows/deploy-ghcr.yml)
 # research-extract-pdf-papers
+[click here to see the full deployed app](https://mcp-rag-scholar-e2da7f414435.herokuapp.com/)
 
 > **MCP server that searches arXiv for research papers, downloads their PDFs, extracts structured content, and indexes it with semantic embeddings — all through a Model Context Protocol (MCP) interface.**
 
